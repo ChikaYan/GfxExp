@@ -75,9 +75,13 @@ EN: This program is an example implementation of Neural Radiance Caching (NRC) [
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
+// #include "restir_shared.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
-
+#include <iostream>
+#include <filesystem>
+#include <fstream>
+// #include <cstdio>
 
 
 enum class GBufferEntryPoint {
@@ -87,6 +91,19 @@ enum class PathTracingEntryPoint {
     Baseline,
     NRC,
     visualizePrediction,
+    performInitialRIS,
+    performInitialAndTemporalRISBiased,
+    performInitialAndTemporalRISUnbiased,
+    performSpatialRISBiased,
+    performSpatialRISUnbiased,
+};
+enum class ReSTIREntryPoint {
+    performInitialRIS,
+    performInitialAndTemporalRISBiased,
+    performInitialAndTemporalRISUnbiased,
+    performSpatialRISBiased,
+    performSpatialRISUnbiased,
+    shading,
 };
 
 struct GPUEnvironment {
@@ -116,6 +133,7 @@ struct GPUEnvironment {
     };
 
     Pipeline<GBufferEntryPoint> gBuffer;
+    Pipeline<ReSTIREntryPoint> restir;
     Pipeline<PathTracingEntryPoint> pathTracing;
 
     optixu::Material optixDefaultMaterial;
@@ -195,7 +213,7 @@ struct GPUEnvironment {
                 pipeline.callablePrograms[i] = program;
                 p.setCallableProgram(i, program);
             }
-
+            std::cout << "linking gbuffer\n";
             p.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
             optixDefaultMaterial.setHitGroup(shared::GBufferRayType::Primary, pipeline.programs.at("hitgroup"));
@@ -208,6 +226,80 @@ struct GPUEnvironment {
             pipeline.sbt.setMappedMemoryPersistent(true);
             p.setShaderBindingTable(pipeline.sbt, pipeline.sbt.getMappedPointer());
         }
+
+        // {
+        //     Pipeline<ReSTIREntryPoint> &pipeline = restir;
+        //     optixu::Pipeline &p = pipeline.optixPipeline;
+        //     optixu::Module &m = pipeline.optixModule;
+        //     p = optixContext.createPipeline();
+
+        //     p.setPipelineOptions(
+        //         std::max({
+        //             shared::VisibilityRayPayloadSignature::numDwords
+        //                  }),
+        //         optixu::calcSumDwords<float2>(),
+        //         "plp", sizeof(shared::PipelineLaunchParameters),
+        //         false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        //         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
+        //         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
+        //         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+
+        //     // printf("create module\n");
+        //     m = p.createModuleFromPTXString(
+        //         readTxtFile(getExecutableDirectory() / "neural_radiance_caching/ptxes/optix_restir_kernels.ptx"),
+        //         OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        //         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        //         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        //     // printf("create entry points\n");
+        //     pipeline.entryPoints[ReSTIREntryPoint::performInitialRIS] =
+        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialRIS"));
+        //     pipeline.entryPoints[ReSTIREntryPoint::performInitialAndTemporalRISBiased] =
+        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialAndTemporalRISBiased"));
+        //     pipeline.entryPoints[ReSTIREntryPoint::performInitialAndTemporalRISUnbiased] =
+        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialAndTemporalRISUnbiased"));
+        //     pipeline.entryPoints[ReSTIREntryPoint::performSpatialRISBiased] =
+        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performSpatialRISBiased"));
+        //     pipeline.entryPoints[ReSTIREntryPoint::performSpatialRISUnbiased] =
+        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performSpatialRISUnbiased"));
+        //     pipeline.entryPoints[ReSTIREntryPoint::shading] =
+        //         p.createRayGenProgram(m, RT_RG_NAME_STR("shading"));
+
+        //     // printf("create miss programe\n");
+        //     pipeline.programs["emptyMiss"] = p.createMissProgram(emptyModule, nullptr);
+        //     pipeline.programs["visibility"] = p.createHitProgramGroupForTriangleIS(
+        //         emptyModule, nullptr,
+        //         m, RT_AH_NAME_STR("visibility"));
+
+        //     p.setNumMissRayTypes(shared::ReSTIRRayType::NumTypes);
+        //     p.setMissProgram(shared::ReSTIRRayType::Visibility, pipeline.programs.at("emptyMiss"));
+
+        //     p.setNumCallablePrograms(NumCallablePrograms);
+        //     pipeline.callablePrograms.resize(NumCallablePrograms);
+        //     for (int i = 0; i < NumCallablePrograms; ++i) {
+        //         optixu::ProgramGroup program = p.createCallableProgramGroup(
+        //             m, callableProgramEntryPoints[i],
+        //             emptyModule, nullptr);
+        //         pipeline.callablePrograms[i] = program;
+        //         p.setCallableProgram(i, program);
+        //     }
+
+        //     std::cout << "linking restir\n";
+        //     p.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+        //     optixDefaultMaterial.setHitGroup(
+        //         shared::ReSTIRRayType::Visibility, pipeline.programs.at("visibility"));
+
+        //     pipeline.programs["emptyHitGroup"] = p.createEmptyHitProgramGroup();
+        //     for (uint32_t rayType = shared::ReSTIRRayType::NumTypes; rayType < shared::maxNumRayTypes; ++rayType)
+        //         optixDefaultMaterial.setHitGroup(rayType, pipeline.programs.at("emptyHitGroup"));
+
+        //     size_t sbtSize;
+        //     p.generateShaderBindingTableLayout(&sbtSize);
+        //     pipeline.sbt.initialize(cuContext, Scene::bufferType, sbtSize, 1);
+        //     pipeline.sbt.setMappedMemoryPersistent(true);
+        //     p.setShaderBindingTable(pipeline.sbt, pipeline.sbt.getMappedPointer());
+        // }
 
         {
             Pipeline<PathTracingEntryPoint> &pipeline = pathTracing;
@@ -240,6 +332,16 @@ struct GPUEnvironment {
                 p.createRayGenProgram(m, RT_RG_NAME_STR("pathTraceNRC"));
             pipeline.entryPoints[PathTracingEntryPoint::visualizePrediction] =
                 p.createRayGenProgram(m, RT_RG_NAME_STR("visualizePrediction"));
+            pipeline.entryPoints[PathTracingEntryPoint::performInitialRIS] =
+                p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialRIS"));
+            pipeline.entryPoints[PathTracingEntryPoint::performInitialAndTemporalRISBiased] =
+                p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialAndTemporalRISBiased"));
+            pipeline.entryPoints[PathTracingEntryPoint::performInitialAndTemporalRISUnbiased] =
+                p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialAndTemporalRISUnbiased"));
+            pipeline.entryPoints[PathTracingEntryPoint::performSpatialRISBiased] =
+                p.createRayGenProgram(m, RT_RG_NAME_STR("performSpatialRISBiased"));
+            pipeline.entryPoints[PathTracingEntryPoint::performSpatialRISUnbiased] =
+                p.createRayGenProgram(m, RT_RG_NAME_STR("performSpatialRISUnbiased"));
 
             pipeline.programs[RT_MS_NAME_STR("pathTraceBaseline")] = p.createMissProgram(
                 m, RT_MS_NAME_STR("pathTraceBaseline"));
@@ -276,6 +378,7 @@ struct GPUEnvironment {
                 p.setCallableProgram(i, program);
             }
 
+            std::cout << "linking nrc\n";
             p.link(2, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
             optixDefaultMaterial.setHitGroup(
@@ -352,6 +455,33 @@ struct GPUEnvironment {
     }
 };
 
+class CsvLogger{
+    public:
+        std::ofstream log_file;
+        std::string log_path;
+
+    CsvLogger(std::string log_path){
+        this->log_path = log_path;
+        std::cout << "Logging at: " << log_path << std::endl;
+        log_file.open(log_path);
+        // write header
+        log_file << "loss" << "\n";
+        // log_file.close();
+    }
+
+    void log(
+        float loss
+    ){
+        // log_file.open(log_path, std::ios_base::app);
+        log_file << loss << "\n";
+        // log_file.close();
+    }
+
+    ~CsvLogger(){
+        log_file.close();
+    }
+
+};
 
 
 struct KeyState {
@@ -411,8 +541,17 @@ static float3 g_cameraPosition;
 static std::filesystem::path g_envLightTexturePath;
 
 static PositionEncoding g_positionEncoding = PositionEncoding::HashGrid;
-static uint32_t g_numHiddenLayers = 2;
+static uint32_t g_numHiddenLayers = 8;
 static float g_learningRate = 1e-2f;
+static std::string exp_name = "test";
+static bool useNRC = true;
+static long rngSeed = 591842031321323413;
+static int32_t maxPathLength = 5;
+static int32_t spp = 1;
+static shared::BufferToDisplay bufferTypeToDisplay = shared::BufferToDisplay::NoisyBeauty;
+
+static uint64_t frameStop = 50;
+static uint64_t saveImgEvery = 1;
 
 static bool g_takeScreenShot = false;
 
@@ -749,6 +888,60 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
                 exit(EXIT_FAILURE);
             }
             i += 1;
+        }
+        else if (0 == strncmp(arg, "-exp_name", 10)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            exp_name = argv[i + 1];
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-rnd_seed", 10)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            rngSeed = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-max_path_len", 14)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            maxPathLength = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-spp", 5)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            spp = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-frame_num", 11)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            frameStop = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-save_img_every", 16)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            saveImgEvery = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-no_nrc", 8)) {
+            useNRC = false;
+        }
+        else if (0 == strncmp(arg, "-nrc_only", 10)) {
+            bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
         }
         else {
             printf("Unknown option.\n");
@@ -1155,6 +1348,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     // ----------------------------------------------------------------
 
 
+    // ----------------------------------------------------------------
+    // Initialize ReSTIR
+    cudau::TypedBuffer<shared::PCG32RNG> lightPreSamplingRngs;
+    cudau::TypedBuffer<shared::PreSampledLight> preSampledLights;
+
+    constexpr uint32_t numPreSampledLights = shared::numLightSubsets * shared::lightSubsetSize;
+    lightPreSamplingRngs.initialize(gpuEnv.cuContext, Scene::bufferType, numPreSampledLights);
+    {
+        shared::PCG32RNG* rngs = lightPreSamplingRngs.map();
+        std::mt19937_64 rngSeed(894213312210);
+        for (int i = 0; i < numPreSampledLights; ++i)
+            rngs[i].setState(rngSeed());
+        lightPreSamplingRngs.unmap();
+    }
+    preSampledLights.initialize(gpuEnv.cuContext, Scene::bufferType, numPreSampledLights);
+
+    // ----------------------------------------------------------------
+
 
     // ----------------------------------------------------------------
     // JP: スクリーン関連のバッファーを初期化。
@@ -1167,6 +1378,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::Array beautyAccumBuffer;
     cudau::Array albedoAccumBuffer;
     cudau::Array normalAccumBuffer;
+
+    optixu::HostBlockBuffer2D<shared::Reservoir<shared::LightSample>, 0> reservoirBuffer[2];
+    cudau::Array reservoirInfoBuffer[2];
+    cudau::Array sampleVisibilityBuffer[2];
 
     cudau::TypedBuffer<float4> linearBeautyBuffer;
     cudau::TypedBuffer<float4> linearAlbedoBuffer;
@@ -1197,6 +1412,18 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 gpuEnv.cuContext, cudau::ArrayElementType::UInt32, (sizeof(shared::GBuffer2) + 3) / 4,
                 cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
                 renderTargetSizeX, renderTargetSizeY, 1);
+
+            reservoirBuffer[i].initialize(gpuEnv.cuContext, Scene::bufferType,
+                                          renderTargetSizeX, renderTargetSizeY);
+            reservoirInfoBuffer[i].initialize2D(
+                gpuEnv.cuContext, cudau::ArrayElementType::UInt32, (sizeof(shared::ReservoirInfo) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                renderTargetSizeX, renderTargetSizeY, 1);
+
+            sampleVisibilityBuffer[i].initialize2D(
+                gpuEnv.cuContext, cudau::ArrayElementType::UInt32, (sizeof(shared::SampleVisibility) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                renderTargetSizeX, renderTargetSizeY, 1);
         }
 
         beautyAccumBuffer.initialize2D(gpuEnv.cuContext, cudau::ArrayElementType::Float32, 4,
@@ -1221,7 +1448,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             renderTargetSizeX, renderTargetSizeY, 1);
         {
             auto rngs = rngBuffer.map<shared::PCG32RNG>();
-            std::mt19937_64 rngSeed(591842031321323413);
+            // std::mt19937_64 rngSeed(591842031321323413);
+            printf("Random seed is: %d\n", rngSeed);
+            std::mt19937_64 rngSeed(rngSeed);
             for (int y = 0; y < renderTargetSizeY; ++y) {
                 for (int x = 0; x < renderTargetSizeX; ++x) {
                     shared::PCG32RNG &rng = rngs[y * renderTargetSizeX + x];
@@ -1230,7 +1459,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
             }
             rngBuffer.unmap();
         }
-
 
 
         uint32_t inferenceBatchSize =
@@ -1275,6 +1503,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             gBuffer0[i].resize(width, height);
             gBuffer1[i].resize(width, height);
             gBuffer2[i].resize(width, height);
+
+            reservoirBuffer[i].resize(renderTargetSizeX, renderTargetSizeY);
+            reservoirInfoBuffer[i].resize(renderTargetSizeX, renderTargetSizeY);
+
+            sampleVisibilityBuffer[i].resize(renderTargetSizeX, renderTargetSizeY);
         }
 
         beautyAccumBuffer.resize(width, height);
@@ -1290,7 +1523,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         rngBuffer.resize(width, height);
         {
             auto rngs = rngBuffer.map<shared::PCG32RNG>();
-            std::mt19937_64 rngSeed(591842031321323413);
+            // std::mt19937_64 rngSeed(591842031321323413);
+            std::mt19937_64 rngSeed(rngSeed);
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x) {
                     shared::PCG32RNG &rng = rngs[y * renderTargetSizeX + x];
@@ -1406,6 +1640,68 @@ int32_t main(int32_t argc, const char* argv[]) try {
         readTxtFile(exeDir / "neural_radiance_caching/shaders/drawOptiXResult.frag"));
 
 
+    // ----------------------------------------------------------------
+    // JP: Spatial Reuseで使用する近傍ピクセルへの方向をLow-discrepancy数列から作成しておく。
+    // EN: Generate directions to neighboring pixels used in spatial reuse from a low-discrepancy sequence.
+    const auto computeHaltonSequence = [](uint32_t base, uint32_t idx) {
+        const float recBase = 1.0f / base;
+        float ret = 0.0f;
+        float scale = 1.0f;
+        while (idx) {
+            scale *= recBase;
+            ret += (idx % base) * scale;
+            idx /= base;
+        }
+        return ret;
+    };
+    const auto concentricSampleDisk = [](float u0, float u1, float* dx, float* dy) {
+        float r, theta;
+        float sx = 2 * u0 - 1;
+        float sy = 2 * u1 - 1;
+
+        if (sx == 0 && sy == 0) {
+            *dx = 0;
+            *dy = 0;
+            return;
+        }
+        if (sx >= -sy) { // region 1 or 2
+            if (sx > sy) { // region 1
+                r = sx;
+                theta = sy / sx;
+            }
+            else { // region 2
+                r = sy;
+                theta = 2 - sx / sy;
+            }
+        }
+        else { // region 3 or 4
+            if (sx > sy) {/// region 4
+                r = -sy;
+                theta = 6 + sx / sy;
+            }
+            else {// region 3
+                r = -sx;
+                theta = 4 + sy / sx;
+            }
+        }
+        theta *= pi_v<float> / 4;
+        *dx = r * cos(theta);
+        *dy = r * sin(theta);
+    };
+    std::vector<float2> spatialNeighborDeltasOnHost(1024);
+    for (int i = 0; i < spatialNeighborDeltasOnHost.size(); ++i) {
+        float2 delta;
+        concentricSampleDisk(computeHaltonSequence(2, i), computeHaltonSequence(3, i), &delta.x, &delta.y);
+        spatialNeighborDeltasOnHost[i] = delta;
+        //printf("%g, %g\n", delta.x, delta.y);
+    }
+    cudau::TypedBuffer<float2> spatialNeighborDeltas(
+        gpuEnv.cuContext, Scene::bufferType, spatialNeighborDeltasOnHost);
+
+    // End generate directions to neighboring pixels used in spatial reuse from a low-discrepancy sequence.
+    // ----------------------------------------------------------------
+
+
 
     shared::StaticPipelineLaunchParameters staticPlp = {};
     {
@@ -1450,20 +1746,47 @@ int32_t main(int32_t argc, const char* argv[]) try {
         staticPlp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
         staticPlp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
         staticPlp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
+
+
+
+        staticPlp.numTiles = int2((renderTargetSizeX + shared::tileSizeX - 1) / shared::tileSizeX,
+                                  (renderTargetSizeY + shared::tileSizeY - 1) / shared::tileSizeY);
+
+        printf("presample \n");
+        staticPlp.lightPreSamplingRngs = lightPreSamplingRngs.getDevicePointer();
+        staticPlp.preSampledLights = preSampledLights.getDevicePointer();
+
+        printf("reservoirBuffer \n");
+        staticPlp.reservoirBuffer[0] = reservoirBuffer[0].getBlockBuffer2D();
+        staticPlp.reservoirBuffer[1] = reservoirBuffer[1].getBlockBuffer2D();
+        printf("reservoirInfoBuffer \n");
+        staticPlp.reservoirInfoBuffer[0] = reservoirInfoBuffer[0].getSurfaceObject(0);
+        staticPlp.reservoirInfoBuffer[1] = reservoirInfoBuffer[1].getSurfaceObject(0);
+        printf("sampleVisibilityBuffer \n");
+        staticPlp.sampleVisibilityBuffer[0] = sampleVisibilityBuffer[0].getSurfaceObject(0);
+        staticPlp.sampleVisibilityBuffer[1] = sampleVisibilityBuffer[1].getSurfaceObject(0);
+        printf("spatialNeighborDeltas \n");
+        staticPlp.spatialNeighborDeltas = spatialNeighborDeltas.getDevicePointer();
+
+        staticPlp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
+        staticPlp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
+        staticPlp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
     }
     CUdeviceptr staticPlpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&staticPlpOnDevice, sizeof(staticPlp)));
     CUDADRV_CHECK(cuMemcpyHtoD(staticPlpOnDevice, &staticPlp, sizeof(staticPlp)));
 
     shared::PerFramePipelineLaunchParameters perFramePlp = {};
-    perFramePlp.travHandle = scene.ias.getHandle();
-    perFramePlp.camera.fovY = 50 * pi_v<float> / 180;
-    perFramePlp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
-    perFramePlp.camera.position = g_cameraPosition;
-    perFramePlp.camera.orientation = g_cameraOrientation.toMatrix3x3();
-    perFramePlp.prevCamera = perFramePlp.camera;
-    perFramePlp.envLightPowerCoeff = 0;
-    perFramePlp.envLightRotation = 0;
+    {    
+        perFramePlp.travHandle = scene.ias.getHandle();
+        perFramePlp.camera.fovY = 50 * pi_v<float> / 180;
+        perFramePlp.camera.aspect = static_cast<float>(renderTargetSizeX) / renderTargetSizeY;
+        perFramePlp.camera.position = g_cameraPosition;
+        perFramePlp.camera.orientation = g_cameraOrientation.toMatrix3x3();
+        perFramePlp.prevCamera = perFramePlp.camera;
+        perFramePlp.envLightPowerCoeff = 0;
+        perFramePlp.envLightRotation = 0;
+    }
 
     CUdeviceptr perFramePlpOnDevice;
     CUDADRV_CHECK(cuMemAlloc(&perFramePlpOnDevice, sizeof(perFramePlp)));
@@ -1479,6 +1802,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     gpuEnv.gBuffer.optixPipeline.setScene(scene.optixScene);
     gpuEnv.gBuffer.optixPipeline.setHitGroupShaderBindingTable(
         gpuEnv.gBuffer.hitGroupSbt, gpuEnv.gBuffer.hitGroupSbt.getMappedPointer());
+
+    // gpuEnv.restir.hitGroupSbt.initialize(
+    //     gpuEnv.cuContext, Scene::bufferType, scene.hitGroupSbtSize, 1);
+    // gpuEnv.restir.hitGroupSbt.setMappedMemoryPersistent(true);
+    // gpuEnv.restir.optixPipeline.setScene(scene.optixScene);
+    // gpuEnv.restir.optixPipeline.setHitGroupShaderBindingTable(
+    //     gpuEnv.restir.hitGroupSbt, gpuEnv.restir.hitGroupSbt.getMappedPointer());
 
     gpuEnv.pathTracing.hitGroupSbt.initialize(
         gpuEnv.cuContext, Scene::bufferType, scene.hitGroupSbtSize, 1);
@@ -1511,6 +1841,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
         cudau::Timer update;
         cudau::Timer computePDFTexture;
         cudau::Timer setupGBuffers;
+        cudau::Timer performInitialAndTemporalRIS;
+        cudau::Timer performSpatialRIS;
+        cudau::Timer shading;
         cudau::Timer preprocessNRC;
         cudau::Timer pathTrace;
         cudau::Timer infer;
@@ -1526,6 +1859,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             update.initialize(context);
             computePDFTexture.initialize(context);
             setupGBuffers.initialize(context);
+            performInitialAndTemporalRIS.initialize(context);
+            performSpatialRIS.initialize(context);
+            shading.initialize(context);
             preprocessNRC.initialize(context);
             pathTrace.initialize(context);
             infer.initialize(context);
@@ -1562,7 +1898,24 @@ int32_t main(int32_t argc, const char* argv[]) try {
     glfwSetWindowUserPointer(window, &frameIndex);
     int32_t requestedSize[2];
     uint32_t numAccumFrames = 0;
-    while (true) {
+    uint32_t saveFrameID = 0;
+    // std::string exp_name = "test";
+    std::string exp_path = "exp/" + exp_name;
+    std::string img_path = exp_path + "/imgs";
+    const bool log_exp = true;
+
+    uint32_t lastSpatialNeighborBaseIndex = 0;
+    uint32_t lastReservoirIndex = 1;
+
+    CsvLogger csvLogger = CsvLogger(exp_path + "/log.csv");
+
+    std::filesystem::create_directories(img_path);
+
+    // gpuEnv.restir.optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+    // link restir again -- very weird, I don't know why it is needed
+
+    while ( (frameStop < 0) || (frameIndex < frameStop)) {
+    // while (true){
         uint32_t bufferIndex = frameIndex % 2;
 
         GPUTimer &curGPUTimer = gpuTimers[bufferIndex];
@@ -1634,6 +1987,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
             staticPlp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
             staticPlp.normalAccumBuffer = normalAccumBuffer.getSurfaceObject(0);
             perFramePlp.camera.aspect = (float)renderTargetSizeX / renderTargetSizeY;
+
+            staticPlp.reservoirBuffer[0] = reservoirBuffer[0].getBlockBuffer2D();
+            staticPlp.reservoirBuffer[1] = reservoirBuffer[1].getBlockBuffer2D();
+            staticPlp.reservoirInfoBuffer[0] = reservoirInfoBuffer[0].getSurfaceObject(0);
+            staticPlp.reservoirInfoBuffer[1] = reservoirInfoBuffer[1].getSurfaceObject(0);
+            staticPlp.sampleVisibilityBuffer[0] = sampleVisibilityBuffer[0].getSurfaceObject(0);
+            staticPlp.sampleVisibilityBuffer[1] = sampleVisibilityBuffer[1].getSurfaceObject(0);
 
             CUDADRV_CHECK(cuMemcpyHtoD(staticPlpOnDevice, &staticPlp, sizeof(staticPlp)));
 
@@ -1730,7 +2090,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bool resetAccumulation = false;
         
         // Camera Window
-        static shared::BufferToDisplay bufferTypeToDisplay = shared::BufferToDisplay::NoisyBeauty;
+
         static bool applyToneMapAndGammaCorrection = true;
         static float brightness = g_initBrightness;
         static bool enableEnvLight = true;
@@ -1797,22 +2157,61 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::End();
         }
 
+
+
+        struct ReSTIRConfigs {
+            int32_t log2NumCandidateSamples;
+            bool enableTemporalReuse = true;
+            bool enableSpatialReuse = true;
+            int32_t numSpatialReusePasses;
+            int32_t numSpatialNeighbors;
+            float spatialNeighborRadius = 20.0f;
+            float radiusThresholdForSpatialVisReuse = 10.0f;
+            bool useLowDiscrepancySpatialNeighbors = true;
+            bool reuseVisibility = true;
+            bool reuseVisibilityForTemporal = true;
+            bool reuseVisibilityForSpatiotemporal = false;
+
+            ReSTIRConfigs(uint32_t _log2NumCandidateSamples,
+                          uint32_t _numSpatialReusePasses, uint32_t _numSpatialNeighbors) :
+                log2NumCandidateSamples(_log2NumCandidateSamples),
+                numSpatialReusePasses(_numSpatialReusePasses),
+                numSpatialNeighbors(_numSpatialNeighbors) {}
+        };
+        enum class Renderer {
+            OriginalReSTIRBiased = 0,
+            OriginalReSTIRUnbiased,
+            RearchitectedReSTIRBiased,
+            RearchitectedReSTIRUnbiased,
+        };
+
+        static ReSTIRConfigs orgRestirBiasedConfigs(5, 2, 5);
+        static ReSTIRConfigs orgRestirUnbiasedConfigs(5, 1, 3);
+        static ReSTIRConfigs rearchRestirBiasedConfigs(5, 1, 1);
+        static ReSTIRConfigs rearchRestirUnbiasedConfigs(5, 1, 1);
+
+        // static Renderer curRenderer = Renderer::OriginalReSTIRBiased;
+        static Renderer curRenderer = Renderer::OriginalReSTIRUnbiased;
+        static ReSTIRConfigs* curRendererConfigs = &orgRestirBiasedConfigs;
+        static float spatialVisibilityReuseRatio = 50.0f;
+
         static bool useTemporalDenosier = true;
         static float motionVectorScale = -1.0f;
-        static bool animate = /*true*/false;
+        // static bool animate = /*true*/false;
+        static bool animate = true;
         static bool enableAccumulation = /*true*/false;
         static int32_t log2MaxNumAccums = 16;
         static bool enableJittering = false;
         static bool enableBumpMapping = false;
         bool lastFrameWasAnimated = false;
         static bool infBounces = false;
-        static int32_t maxPathLength = 5;
-        static bool useNRC = true;
+        
+        
         static float log10RadianceScale = brightness;
         static bool visualizeTrainingPath = false;
         static bool train = true;
         bool stepTrain = false;
-        static bool showLossValue = false;
+        static bool showLossValue = true;
         static float lossValue = 0.0f;
         static bool prevTrainDone = false;
         static bool debugSwitches[] = {
@@ -1944,13 +2343,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                         ImGui::Text("MLP Num Hidden Layers");
                         uint32_t prevNumHiddenLayers = g_numHiddenLayers;
-                        static bool use5HiddenLayers = g_numHiddenLayers == 5;
-                        if (ImGui::RadioButton("5", use5HiddenLayers))
-                            use5HiddenLayers = true;
-                        ImGui::SameLine();
-                        if (ImGui::RadioButton("2", !use5HiddenLayers))
-                            use5HiddenLayers = false;
-                        g_numHiddenLayers = use5HiddenLayers ? 5 : 2;
+                        // static bool use5HiddenLayers = g_numHiddenLayers == 5;
+                        // if (ImGui::RadioButton("5", use5HiddenLayers))
+                        //     use5HiddenLayers = true;
+                        // ImGui::SameLine();
+                        // if (ImGui::RadioButton("2", !use5HiddenLayers))
+                        //     use5HiddenLayers = false;
+                        // g_numHiddenLayers = use5HiddenLayers ? 5 : 2;
 
                         float prevLearningRate = g_learningRate;
                         {
@@ -2189,257 +2588,408 @@ int32_t main(int32_t argc, const char* argv[]) try {
         CUDADRV_CHECK(cuMemcpyHtoDAsync(gpuEnv.plpPtr, &plp, sizeof(plp), cuStream));
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpPtrOnDeviceForCopyBuffers, &plp, sizeof(plp), cuStream));
 
-        // JP: Gバッファーのセットアップ。
-        //     ここではレイトレースを使ってGバッファーを生成しているがもちろんラスタライザーで生成可能。
-        // EN: Setup the G-buffers.
-        //     Generate the G-buffers using ray trace here, but of course this can be done using rasterizer.
-        curGPUTimer.setupGBuffers.start(cuStream);
-        gpuEnv.gBuffer.optixPipeline.launch(
-            cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-        curGPUTimer.setupGBuffers.stop(cuStream);
+        uint32_t currentReservoirIndex = (lastReservoirIndex + 1) % 2;
+        //hpprintf("%u\n", currentReservoirIndex);
 
-        // JP: タイルサイズのアップデートやTraining Suffixの終端情報初期化などを行う。
-        // EN: Perform update of the tile size and initialization of training suffixes and so on.
-        if (useNRC) {
-            curGPUTimer.preprocessNRC.start(cuStream);
-            gpuEnv.kernelPreprocessNRC.launchWithThreadDim(
-                cuStream, cudau::dim3(maxNumTrainingSuffixes),
-                perFrameRng(), perFrameRng(), newSequence);
-            curGPUTimer.preprocessNRC.stop(cuStream);
-        }
-
-        // JP: パストレースを行い、Rendering Pathと訓練データの生成を行う。
-        // EN: Path trace to generate rendering paths and training data.
-        curGPUTimer.pathTrace.start(cuStream);
+        plp.currentReservoirIndex = currentReservoirIndex;
+        plp.spatialNeighborBaseIndex = lastSpatialNeighborBaseIndex;
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
-        PathTracingEntryPoint entryPoint = useNRC ?
-            PathTracingEntryPoint::NRC : PathTracingEntryPoint::Baseline;
-        gpuEnv.pathTracing.setEntryPoint(entryPoint);
-        gpuEnv.pathTracing.optixPipeline.launch(
-            cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
-        curGPUTimer.pathTrace.stop(cuStream);
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(gpuEnv.plpPtr, &plp, sizeof(plp), cuStream));
 
-        if (useNRC) {
-            // JP: CUDAではdispatchIndirectのような動的なディスパッチサイズの指定が
-            //     サポートされていないので仕方なくGPUと同期して訓練データ数などを取得する。
-            //     実際のリアルタイムレンダリング実装の場合は動的なディスパッチサイズ指定を行う必要がある。
-            // EN: CUDA does not support dynamic dispatch size like dispatchIndirect,
-            //     so it has no choice but to synchronize with the GPU to obtain the number of training data and so on.
-            //     Practical real-time rendering implementation requires dynamic dispatch size specification.
-            uint32_t numTrainingDataOnHost;
-            uint2 tileSizeOnHost;
-            numTrainingData[bufferIndex].read(&numTrainingDataOnHost, 1, cuStream);
-            tileSize[bufferIndex].read(&tileSizeOnHost, 1, cuStream);
-            uint2 numTiles = (uint2(renderTargetSizeX, renderTargetSizeY) + tileSizeOnHost - 1) / tileSizeOnHost;
-            uint32_t numInferenceQueries = renderTargetSizeX * renderTargetSizeY + numTiles.x * numTiles.y;
-            numInferenceQueries = (numInferenceQueries + 127) / 128 * 128;
-            //printf("numTrainingData: %u, TileSize: %u x %u\n",
-            //       numTrainingData, tileSize.x, tileSize.y);
-
-            // JP: Rendering PathとTraining Suffixの終端の輝度を推定する。
-            // EN: Predict radiance values at the terminals of rendering paths and training suffixes.
-            curGPUTimer.infer.start(cuStream);
-            neuralRadianceCache.infer(
-                cuStream,
-                reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
-                numInferenceQueries,
-                reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
-            curGPUTimer.infer.stop(cuStream);
-
-            // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。
-            // EN: Accumulate the predicted radiance values to the pixels to complete the current frame.
-            curGPUTimer.accumulateInferredRadiances.start(cuStream);
-            gpuEnv.kernelAccumulateInferredRadianceValues(
-                cuStream,
-                gpuEnv.kernelAccumulateInferredRadianceValues.calcGridDim(renderTargetSizeX * renderTargetSizeY));
-            curGPUTimer.accumulateInferredRadiances.stop(cuStream);
-
-            prevTrainDone = false;
-            if (train || stepTrain) {
-                prevTrainDone = true;
-
-                // JP: Training Suffixの終端から輝度を伝播させてTraining Vertexのデータを完成させる。
-                // EN: Propagate the radiance values from the terminals of training suffixes to
-                //     complete training vertex data.
-                curGPUTimer.propagateRadiances.start(cuStream);
-                gpuEnv.kernelPropagateRadianceValues.launchWithThreadDim(
-                    cuStream, cudau::dim3(maxNumTrainingSuffixes));
-                curGPUTimer.propagateRadiances.stop(cuStream);
-
-                // JP: 訓練データの空間的な相関を取り除くためにデータをシャッフルする。
-                // EN: Shuffle the training data to get rid of spatial correlations of the training data.
-                curGPUTimer.shuffleTrainingData.start(cuStream);
-                gpuEnv.kernelShuffleTrainingData.launchWithThreadDim(
-                    cuStream, cudau::dim3(shared::numTrainingDataPerFrame));
-                curGPUTimer.shuffleTrainingData.stop(cuStream);
-
-                // JP: トレーニングの実行。
-                // EN: Perform training.
-                curGPUTimer.train.start(cuStream);
-                {
-                    constexpr uint32_t batchSize = shared::numTrainingDataPerFrame / 4;
-                    static_assert((batchSize & 0xFF) == 0, "Batch size has to be a multiple of 256.");
-                    //const uint32_t targetBatchSize =
-                    //    (std::min(numTrainingData, shared::numTrainingDataPerFrame) / 4 + 255) / 256 * 256;
-                    uint32_t dataStartIndex = 0;
-                    for (int step = 0; step < 4; ++step) {
-                        //uint32_t batchSize = std::min(numTrainingData - dataStartIndex, targetBatchSize);
-                        //batchSize = batchSize / 256 * 256;
-                        neuralRadianceCache.train(
-                            cuStream,
-                            reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
-                            reinterpret_cast<float*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
-                            batchSize,
-                            (showLossValue && step == 3) ? &lossValue : nullptr);
-                        dataStartIndex += batchSize;
-                    }
-                }
-                curGPUTimer.train.stop(cuStream);
-            }
-        }
-
-        // JP: ニューラルネットワークの推定値を直接可視化する。
-        // EN: Directly visualize the predictions of the neural network.
-        if (bufferTypeToDisplay == shared::BufferToDisplay::DirectlyVisualizedPrediction) {
-            curGPUTimer.visualizeCache.start(cuStream);
-
-            gpuEnv.pathTracing.setEntryPoint(PathTracingEntryPoint::visualizePrediction);
-            gpuEnv.pathTracing.optixPipeline.launch(
+        for (int i = 0; i < spp; ++i)    
+        {           
+             // JP: Gバッファーのセットアップ。
+            //     ここではレイトレースを使ってGバッファーを生成しているがもちろんラスタライザーで生成可能。
+            // EN: Setup the G-buffers.
+            //     Generate the G-buffers using ray trace here, but of course this can be done using rasterizer.
+            curGPUTimer.setupGBuffers.start(cuStream);
+            gpuEnv.gBuffer.optixPipeline.launch(
                 cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+            curGPUTimer.setupGBuffers.stop(cuStream);
 
-            neuralRadianceCache.infer(
-                cuStream,
-                reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
-                renderTargetSizeX * renderTargetSizeY,
-                reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
+            // -----------------------------------------------------------------
+            // EN: Perform independent streaming RIS on each pixel.
+            //     Then combine reservoirs between the current pixel and
+            //     (temporally) neighboring pixel from the previous frame. 
+            // {
+            //     curGPUTimer.performInitialAndTemporalRIS.start(cuStream);
+            //     ReSTIREntryPoint entryPoint = ReSTIREntryPoint::performInitialRIS;
+            //     if (curRendererConfigs->enableTemporalReuse && !newSequence) {
+            //         entryPoint = curRenderer == Renderer::OriginalReSTIRUnbiased ?
+            //             ReSTIREntryPoint::performInitialAndTemporalRISUnbiased :
+            //             ReSTIREntryPoint::performInitialAndTemporalRISBiased;
+            //     }
+            //     // gpuEnv.restir.optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+            //     gpuEnv.restir.setEntryPoint(entryPoint);
+            //     gpuEnv.restir.optixPipeline.launch(
+            //         cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+            //     curGPUTimer.performInitialAndTemporalRIS.stop(cuStream);
 
-            curGPUTimer.visualizeCache.stop(cuStream);
-        }
+            //     // JP: 各ピクセルにおいて(空間的)隣接ピクセルとの間でReservoirの結合を行う。
+            //     // EN: For each pixel, combine reservoirs between the current pixel and
+            //     //     (Spatially) neighboring pixels.
+            //     curGPUTimer.performSpatialRIS.start(cuStream);
+            //     if (curRendererConfigs->enableSpatialReuse) {
+            //         int32_t numSpatialReusePasses;
+            //         ReSTIREntryPoint entryPoint = ReSTIREntryPoint::performSpatialRISBiased;
+            //         gpuEnv.restir.setEntryPoint(entryPoint);
+            //         numSpatialReusePasses = curRendererConfigs->numSpatialReusePasses;
 
-        // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
-        // EN: Copy the results to the linear buffers (and normalize normals).
-        kernelCopyToLinearBuffers.launchWithThreadDim(
-            cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
-            beautyAccumBuffer.getSurfaceObject(0),
-            albedoAccumBuffer.getSurfaceObject(0),
-            normalAccumBuffer.getSurfaceObject(0),
-            gBuffer2[bufferIndex].getSurfaceObject(0),
-            linearBeautyBuffer,
-            linearAlbedoBuffer,
-            linearNormalBuffer,
-            linearFlowBuffer,
-            uint2(renderTargetSizeX, renderTargetSizeY));
+            //         for (int i = 0; i < numSpatialReusePasses; ++i) {
+            //             uint32_t baseIndex =
+            //                 lastSpatialNeighborBaseIndex + curRendererConfigs->numSpatialNeighbors * i;
+            //             plp.spatialNeighborBaseIndex = baseIndex;
+            //             CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+            //             gpuEnv.restir.optixPipeline.launch(
+            //                 cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+            //             currentReservoirIndex = (currentReservoirIndex + 1) % 2;
+            //             plp.currentReservoirIndex = currentReservoirIndex;
+            //         }
+            //         lastSpatialNeighborBaseIndex += curRendererConfigs->numSpatialNeighbors * numSpatialReusePasses;
+            //     }
+            //     curGPUTimer.performSpatialRIS.stop(cuStream);
 
-        curGPUTimer.denoise.start(cuStream);
-        if (bufferTypeToDisplay == shared::BufferToDisplay::DenoisedBeauty) {
-            denoiser.computeNormalizer(
-                cuStream,
-                linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
-                denoiserScratchBuffer, hdrNormalizer);
-            //float hdrNormalizerOnHost;
-            //CUDADRV_CHECK(cuMemcpyDtoH(&hdrNormalizerOnHost, hdrNormalizer, sizeof(hdrNormalizerOnHost)));
-            //printf("%g\n", hdrNormalizerOnHost);
-
-            optixu::DenoiserInputBuffers inputBuffers = {};
-            inputBuffers.noisyBeauty = linearBeautyBuffer;
-            inputBuffers.albedo = linearAlbedoBuffer;
-            inputBuffers.normal = linearNormalBuffer;
-            inputBuffers.flow = linearFlowBuffer;
-            inputBuffers.previousDenoisedBeauty = newSequence ?
-                linearBeautyBuffer : linearDenoisedBeautyBuffer;
-            inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-            inputBuffers.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-            inputBuffers.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-            inputBuffers.flowFormat = OPTIX_PIXEL_FORMAT_FLOAT2;
-
-            for (int i = 0; i < denoisingTasks.size(); ++i)
-                denoiser.invoke(
-                    cuStream, denoisingTasks[i], inputBuffers,
-                    newSequence, OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer, 0.0f,
-                    linearDenoisedBeautyBuffer, nullptr,
-                    optixu::BufferView());
-        }
-        curGPUTimer.denoise.stop(cuStream);
-
-        outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
-
-        // JP: デノイズ結果や中間バッファーの可視化。
-        // EN: Visualize the denosed result or intermediate buffers.
-        void* bufferToDisplay = nullptr;
-        switch (bufferTypeToDisplay) {
-        case shared::BufferToDisplay::NoisyBeauty:
-            bufferToDisplay = linearBeautyBuffer.getDevicePointer();
-            break;
-        case shared::BufferToDisplay::Albedo:
-            bufferToDisplay = linearAlbedoBuffer.getDevicePointer();
-            break;
-        case shared::BufferToDisplay::Normal:
-            bufferToDisplay = linearNormalBuffer.getDevicePointer();
-            break;
-        case shared::BufferToDisplay::Flow:
-            bufferToDisplay = linearFlowBuffer.getDevicePointer();
-            break;
-        case shared::BufferToDisplay::RenderingPathLength:
-        case shared::BufferToDisplay::DirectlyVisualizedPrediction:
-            break;
-        case shared::BufferToDisplay::DenoisedBeauty:
-            bufferToDisplay = linearDenoisedBeautyBuffer.getDevicePointer();
-            break;
-        default:
-            Assert_ShouldNotBeCalled();
-            break;
-        }
-        kernelVisualizeToOutputBuffer.launchWithThreadDim(
-            cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
-            visualizeTrainingPath,
-            bufferToDisplay, bufferTypeToDisplay,
-            0.5f, std::pow(10.0f, motionVectorScale),
-            outputBufferSurfaceHolder.getNext());
-
-        outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
-
-        curGPUTimer.frame.stop(cuStream);
+            //     // JP: 生き残ったサンプルを使ってシェーディングを実行。
+            //     // EN: Perform shading using the survived samples.
+            //     curGPUTimer.shading.start(cuStream);
+            //     CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+            //     gpuEnv.restir.setEntryPoint(ReSTIREntryPoint::shading);
+            //     gpuEnv.restir.optixPipeline.launch(cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+            //     curGPUTimer.shading.stop(cuStream);
 
 
+            //     lastReservoirIndex = currentReservoirIndex;
+            // }
+            // std::cout << "restir running\n";
+            {
+                curGPUTimer.performInitialAndTemporalRIS.start(cuStream);
+                PathTracingEntryPoint entryPoint = PathTracingEntryPoint::performInitialRIS;
+                if (curRendererConfigs->enableTemporalReuse && !newSequence) {
+                    entryPoint = curRenderer == Renderer::OriginalReSTIRUnbiased ?
+                        PathTracingEntryPoint::performInitialAndTemporalRISUnbiased :
+                        PathTracingEntryPoint::performInitialAndTemporalRISBiased;
 
-        // ----------------------------------------------------------------
-        // JP: OptiXによる描画結果を表示用レンダーターゲットにコピーする。
-        // EN: Copy the OptiX rendering results to the display render target.
+                }
+                // std::cout << "OriginalReSTIRUnbiased: " << (curRenderer == Renderer::OriginalReSTIRUnbiased) << "\n";
 
-        if (applyToneMapAndGammaCorrection) {
-            glEnable(GL_FRAMEBUFFER_SRGB);
-            ImGui::GetStyle() = guiStyleWithGamma;
-        }
-        else {
+
+                // gpuEnv.pathTracing.optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+                gpuEnv.pathTracing.setEntryPoint(entryPoint);
+                gpuEnv.pathTracing.optixPipeline.launch(
+                    cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+                curGPUTimer.performInitialAndTemporalRIS.stop(cuStream);
+
+                // JP: 各ピクセルにおいて(空間的)隣接ピクセルとの間でReservoirの結合を行う。
+                // EN: For each pixel, combine reservoirs between the current pixel and
+                //     (Spatially) neighboring pixels.
+                curGPUTimer.performSpatialRIS.start(cuStream);
+                if (curRendererConfigs->enableSpatialReuse) {
+                    int32_t numSpatialReusePasses;
+                    PathTracingEntryPoint entryPoint = PathTracingEntryPoint::performSpatialRISBiased;
+                    gpuEnv.pathTracing.setEntryPoint(entryPoint);
+                    numSpatialReusePasses = curRendererConfigs->numSpatialReusePasses;
+
+                    for (int i = 0; i < numSpatialReusePasses; ++i) {
+                        uint32_t baseIndex =
+                            lastSpatialNeighborBaseIndex + curRendererConfigs->numSpatialNeighbors * i;
+                        plp.spatialNeighborBaseIndex = baseIndex;
+                        CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+                        gpuEnv.pathTracing.optixPipeline.launch(
+                            cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+                        currentReservoirIndex = (currentReservoirIndex + 1) % 2;
+                        plp.currentReservoirIndex = currentReservoirIndex;
+                    }
+                    lastSpatialNeighborBaseIndex += curRendererConfigs->numSpatialNeighbors * numSpatialReusePasses;
+                }
+                curGPUTimer.performSpatialRIS.stop(cuStream);
+
+                lastReservoirIndex = currentReservoirIndex;
+            }
+            // -----------------------------------------------------------------
+
+
+            // JP: タイルサイズのアップデートやTraining Suffixの終端情報初期化などを行う。
+            // EN: Perform update of the tile size and initialization of training suffixes and so on.
+
+            // std::cout << "nrc running\n";
+            if (useNRC) {
+                curGPUTimer.preprocessNRC.start(cuStream);
+                gpuEnv.kernelPreprocessNRC.launchWithThreadDim(
+                    cuStream, cudau::dim3(maxNumTrainingSuffixes),
+                    perFrameRng(), perFrameRng(), newSequence);
+                curGPUTimer.preprocessNRC.stop(cuStream);
+            }
+
+            // JP: パストレースを行い、Rendering Pathと訓練データの生成を行う。
+            // EN: Path trace to generate rendering paths and training data.
+            {
+                curGPUTimer.pathTrace.start(cuStream);
+                CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
+                PathTracingEntryPoint entryPoint = useNRC ?
+                    PathTracingEntryPoint::NRC : PathTracingEntryPoint::Baseline;
+                gpuEnv.pathTracing.setEntryPoint(entryPoint);
+                // std::cout << "nrc launch\n";
+                gpuEnv.pathTracing.optixPipeline.launch(
+                    cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+                curGPUTimer.pathTrace.stop(cuStream);
+            }
+
+            if (useNRC) {
+                // JP: CUDAではdispatchIndirectのような動的なディスパッチサイズの指定が
+                //     サポートされていないので仕方なくGPUと同期して訓練データ数などを取得する。
+                //     実際のリアルタイムレンダリング実装の場合は動的なディスパッチサイズ指定を行う必要がある。
+                // EN: CUDA does not support dynamic dispatch size like dispatchIndirect,
+                //     so it has no choice but to synchronize with the GPU to obtain the number of training data and so on.
+                //     Practical real-time rendering implementation requires dynamic dispatch size specification.
+                uint32_t numTrainingDataOnHost;
+                uint2 tileSizeOnHost;
+                numTrainingData[bufferIndex].read(&numTrainingDataOnHost, 1, cuStream);
+                tileSize[bufferIndex].read(&tileSizeOnHost, 1, cuStream);
+                uint2 numTiles = (uint2(renderTargetSizeX, renderTargetSizeY) + tileSizeOnHost - 1) / tileSizeOnHost;
+                uint32_t numInferenceQueries = renderTargetSizeX * renderTargetSizeY + numTiles.x * numTiles.y;
+                numInferenceQueries = (numInferenceQueries + 127) / 128 * 128;
+                //printf("numTrainingData: %u, TileSize: %u x %u\n",
+                //       numTrainingData, tileSize.x, tileSize.y);
+
+                // JP: Rendering PathとTraining Suffixの終端の輝度を推定する。
+                // EN: Predict radiance values at the terminals of rendering paths and training suffixes.
+                curGPUTimer.infer.start(cuStream);
+                // TODO support pytorch
+                neuralRadianceCache.infer(
+                    cuStream,
+                    reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
+                    numInferenceQueries,
+                    reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
+                curGPUTimer.infer.stop(cuStream);
+
+                // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。
+                // EN: Accumulate the predicted radiance values to the pixels to complete the current frame.
+                curGPUTimer.accumulateInferredRadiances.start(cuStream);
+                gpuEnv.kernelAccumulateInferredRadianceValues(
+                    cuStream,
+                    gpuEnv.kernelAccumulateInferredRadianceValues.calcGridDim(renderTargetSizeX * renderTargetSizeY));
+                curGPUTimer.accumulateInferredRadiances.stop(cuStream);
+
+                prevTrainDone = false;
+                if (train || stepTrain) {
+                    prevTrainDone = true;
+
+                    // JP: Training Suffixの終端から輝度を伝播させてTraining Vertexのデータを完成させる。
+                    // EN: Propagate the radiance values from the terminals of training suffixes to
+                    //     complete training vertex data.
+                    curGPUTimer.propagateRadiances.start(cuStream);
+                    gpuEnv.kernelPropagateRadianceValues.launchWithThreadDim(
+                        cuStream, cudau::dim3(maxNumTrainingSuffixes));
+                    curGPUTimer.propagateRadiances.stop(cuStream);
+
+                    // JP: 訓練データの空間的な相関を取り除くためにデータをシャッフルする。
+                    // EN: Shuffle the training data to get rid of spatial correlations of the training data.
+                    curGPUTimer.shuffleTrainingData.start(cuStream);
+                    gpuEnv.kernelShuffleTrainingData.launchWithThreadDim(
+                        cuStream, cudau::dim3(shared::numTrainingDataPerFrame));
+                    curGPUTimer.shuffleTrainingData.stop(cuStream);
+
+                    // JP: トレーニングの実行。
+                    // EN: Perform training.
+                    curGPUTimer.train.start(cuStream);
+                    {
+                        constexpr uint32_t batchSize = shared::numTrainingDataPerFrame / 4;
+                        static_assert((batchSize & 0xFF) == 0, "Batch size has to be a multiple of 256.");
+                        //const uint32_t targetBatchSize =
+                        //    (std::min(numTrainingData, shared::numTrainingDataPerFrame) / 4 + 255) / 256 * 256;
+                        uint32_t dataStartIndex = 0;
+                        for (int step = 0; step < 4; ++step) {
+                            //uint32_t batchSize = std::min(numTrainingData - dataStartIndex, targetBatchSize);
+                            //batchSize = batchSize / 256 * 256;
+                            neuralRadianceCache.train(
+                                cuStream,
+                                reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                reinterpret_cast<float*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                batchSize,
+                                (showLossValue && step == 3) ? &lossValue : nullptr);
+                            dataStartIndex += batchSize;
+                        }
+                    }
+                    curGPUTimer.train.stop(cuStream);
+                }
+            }
+
+            // JP: ニューラルネットワークの推定値を直接可視化する。
+            // EN: Directly visualize the predictions of the neural network.
+            if (bufferTypeToDisplay == shared::BufferToDisplay::DirectlyVisualizedPrediction) {
+                curGPUTimer.visualizeCache.start(cuStream);
+
+                gpuEnv.pathTracing.setEntryPoint(PathTracingEntryPoint::visualizePrediction);
+                gpuEnv.pathTracing.optixPipeline.launch(
+                    cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+
+                neuralRadianceCache.infer(
+                    cuStream,
+                    reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
+                    renderTargetSizeX * renderTargetSizeY,
+                    reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
+
+                curGPUTimer.visualizeCache.stop(cuStream);
+            }
+
+            // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
+            // EN: Copy the results to the linear buffers (and normalize normals).
+            kernelCopyToLinearBuffers.launchWithThreadDim(
+                cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
+                beautyAccumBuffer.getSurfaceObject(0),
+                albedoAccumBuffer.getSurfaceObject(0),
+                normalAccumBuffer.getSurfaceObject(0),
+                gBuffer2[bufferIndex].getSurfaceObject(0),
+                linearBeautyBuffer,
+                linearAlbedoBuffer,
+                linearNormalBuffer,
+                linearFlowBuffer,
+                uint2(renderTargetSizeX, renderTargetSizeY));
+
+            curGPUTimer.denoise.start(cuStream);
+            if (bufferTypeToDisplay == shared::BufferToDisplay::DenoisedBeauty) {
+                denoiser.computeNormalizer(
+                    cuStream,
+                    linearBeautyBuffer, OPTIX_PIXEL_FORMAT_FLOAT4,
+                    denoiserScratchBuffer, hdrNormalizer);
+                //float hdrNormalizerOnHost;
+                //CUDADRV_CHECK(cuMemcpyDtoH(&hdrNormalizerOnHost, hdrNormalizer, sizeof(hdrNormalizerOnHost)));
+                //printf("%g\n", hdrNormalizerOnHost);
+
+                optixu::DenoiserInputBuffers inputBuffers = {};
+                inputBuffers.noisyBeauty = linearBeautyBuffer;
+                inputBuffers.albedo = linearAlbedoBuffer;
+                inputBuffers.normal = linearNormalBuffer;
+                inputBuffers.flow = linearFlowBuffer;
+                inputBuffers.previousDenoisedBeauty = newSequence ?
+                    linearBeautyBuffer : linearDenoisedBeautyBuffer;
+                inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+                inputBuffers.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+                inputBuffers.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+                inputBuffers.flowFormat = OPTIX_PIXEL_FORMAT_FLOAT2;
+
+                for (int i = 0; i < denoisingTasks.size(); ++i)
+                    denoiser.invoke(
+                        cuStream, denoisingTasks[i], inputBuffers,
+                        newSequence, OPTIX_DENOISER_ALPHA_MODE_COPY, hdrNormalizer, 0.0f,
+                        linearDenoisedBeautyBuffer, nullptr,
+                        optixu::BufferView());
+            }
+            curGPUTimer.denoise.stop(cuStream);
+
+            outputBufferSurfaceHolder.beginCUDAAccess(cuStream);
+
+            // JP: デノイズ結果や中間バッファーの可視化。
+            // EN: Visualize the denosed result or intermediate buffers.
+            void* bufferToDisplay = nullptr;
+            switch (bufferTypeToDisplay) {
+            case shared::BufferToDisplay::NoisyBeauty:
+                bufferToDisplay = linearBeautyBuffer.getDevicePointer();
+                break;
+            case shared::BufferToDisplay::Albedo:
+                bufferToDisplay = linearAlbedoBuffer.getDevicePointer();
+                break;
+            case shared::BufferToDisplay::Normal:
+                bufferToDisplay = linearNormalBuffer.getDevicePointer();
+                break;
+            case shared::BufferToDisplay::Flow:
+                bufferToDisplay = linearFlowBuffer.getDevicePointer();
+                break;
+            case shared::BufferToDisplay::RenderingPathLength:
+            case shared::BufferToDisplay::DirectlyVisualizedPrediction:
+                break;
+            case shared::BufferToDisplay::DenoisedBeauty:
+                bufferToDisplay = linearDenoisedBeautyBuffer.getDevicePointer();
+                break;
+            default:
+                Assert_ShouldNotBeCalled();
+                break;
+            }
+            kernelVisualizeToOutputBuffer.launchWithThreadDim(
+                cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
+                visualizeTrainingPath,
+                bufferToDisplay, bufferTypeToDisplay,
+                0.5f, std::pow(10.0f, motionVectorScale),
+                outputBufferSurfaceHolder.getNext());
+
+            outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
+
+            curGPUTimer.frame.stop(cuStream);
+
+
+
+            // ----------------------------------------------------------------
+            // JP: OptiXによる描画結果を表示用レンダーターゲットにコピーする。
+            // EN: Copy the OptiX rendering results to the display render target.
+
+            if (applyToneMapAndGammaCorrection) {
+                glEnable(GL_FRAMEBUFFER_SRGB);
+                ImGui::GetStyle() = guiStyleWithGamma;
+            }
+            else {
+                glDisable(GL_FRAMEBUFFER_SRGB);
+                ImGui::GetStyle() = guiStyle;
+            }
+
+            glViewport(0, 0, curFBWidth, curFBHeight);
+
+            glUseProgram(drawOptiXResultShader.getHandle());
+
+            glUniform2ui(0, curFBWidth, curFBHeight);
+            int32_t flags =
+                (applyToneMapAndGammaCorrection ? 1 : 0);
+            glUniform1i(2, flags);
+            glUniform1f(3, std::pow(10.0f, brightness));
+
+            glBindTextureUnit(0, outputTexture.getHandle());
+            glBindSampler(0, outputSampler.getHandle());
+
+            glBindVertexArray(vertexArrayForFullScreen.getHandle());
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
             glDisable(GL_FRAMEBUFFER_SRGB);
-            ImGui::GetStyle() = guiStyle;
-        }
 
-        glViewport(0, 0, curFBWidth, curFBHeight);
+            // END: Copy the OptiX rendering results to the display render target.
+            // ----------------------------------------------------------------
 
-        glUseProgram(drawOptiXResultShader.getHandle());
+            glfwSwapBuffers(window);
 
-        glUniform2ui(0, curFBWidth, curFBHeight);
-        int32_t flags =
-            (applyToneMapAndGammaCorrection ? 1 : 0);
-        glUniform1i(2, flags);
-        glUniform1f(3, std::pow(10.0f, brightness));
+            // logging
+            if ((log_exp) && (saveImgEvery > 0) && (frameIndex % saveImgEvery == 0)) {
+                // save imgs 
+                CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+                auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
+                glGetTextureSubImage(
+                outputTexture.getHandle(), 0,
+                0, 0, 0, renderTargetSizeX, renderTargetSizeY, 1,
+                GL_RGBA, GL_FLOAT, sizeof(float4) * renderTargetSizeX * renderTargetSizeY, rawImage);
 
-        glBindTextureUnit(0, outputTexture.getHandle());
-        glBindSampler(0, outputSampler.getHandle());
+                SDRImageSaverConfig config;
+                config.brightnessScale = std::pow(10.0f, brightness);
+                config.applyToneMap = applyToneMapAndGammaCorrection;
+                config.apply_sRGB_gammaCorrection = applyToneMapAndGammaCorrection;
+                // char outpath[50];
+                // sprintf(outpath, "%s/%05d.png", exp_path, saveFrameID);
+                std::string outpath;
+                if (spp > 1){
+                    outpath = std::format("{}/{:05d}_{:02d}.png", img_path, frameIndex, i);
+                } else {
+                    outpath = std::format("{}/{:05d}.png", img_path, frameIndex);
+                }
+                    
+                // ++saveFrameID;
+                saveImage(outpath, renderTargetSizeX, renderTargetSizeY, rawImage,
+                            config);
+                // printf("Saving img to: %s\n", outpath);
+                std::cout << outpath << std::endl;
+                delete[] rawImage;
 
-        glBindVertexArray(vertexArrayForFullScreen.getHandle());
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        glDisable(GL_FRAMEBUFFER_SRGB);
-
-        // END: Copy the OptiX rendering results to the display render target.
-        // ----------------------------------------------------------------
-
-        glfwSwapBuffers(window);
+                // save loss info
+                csvLogger.log(lossValue);
+            }}
 
         ++frameIndex;
     }

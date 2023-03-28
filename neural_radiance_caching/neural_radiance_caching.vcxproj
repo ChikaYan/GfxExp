@@ -120,6 +120,7 @@
     <ClInclude Include="..\utils\optix_util_private.h" />
     <ClInclude Include="network_interface.h" />
     <ClInclude Include="neural_radiance_caching_shared.h" />
+    <ClInclude Include="restir_shared.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="gpu_kernels\copy_buffers.cu" />
@@ -128,6 +129,10 @@
       <GenerateLineInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateLineInfo>
     </CudaCompile>
     <CudaCompile Include="gpu_kernels\optix_pathtracing_kernels.cu">
+      <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
+      <GenerateLineInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateLineInfo>
+    </CudaCompile>
+    <CudaCompile Include="gpu_kernels\optix_restir_kernels.cu">
       <GPUDebugInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</GPUDebugInfo>
       <GenerateLineInfo Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateLineInfo>
     </CudaCompile>

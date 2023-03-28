@@ -25,7 +25,20 @@ else()
     message(FATAL_ERROR "OptiX SDK 7.5 not found.")
 endif()
 
+# find_package(tensorboard_logger REQUIRED)
 
+# STRING (REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}") 
+# STRING (REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+
+# FetchContent_Declare(
+#     tensorboard_logger
+#     GIT_REPOSITORY      https://github.com/RustingSword/tensorboard_logger.git
+#     GIT_TAG             master
+# )
+# FetchContent_MakeAvailable(tensorboard_logger)
+
+# STRING (REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}") 
+# STRING (REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
 
 # ----------------------------------------------------------------
 # JP: プロジェクト間で共通のソースコードのリスト作成。
@@ -311,10 +324,11 @@ target_link_libraries(
     gl3w
     glfw
     assimp::assimp
+    # tensorboard_logger
 )
 
-add_subdirectory(path_tracing)
+# add_subdirectory(path_tracing)
 add_subdirectory(restir)
-add_subdirectory(regir)
+# add_subdirectory(regir)
 add_subdirectory(neural_radiance_caching)
-add_subdirectory(svgf)
+# add_subdirectory(svgf)

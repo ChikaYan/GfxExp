@@ -63,7 +63,7 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
                     radiance *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
                 }
             }
-            value = make_float4(terminalInfo.alpha * radiance, 1.0f);
+            value = make_float4(terminalInfo.alpha * radiance, 1.0f); // what is alpha? Why needed?
         }
         else {
             auto typedLinearBuffer = reinterpret_cast<const float4*>(linearBuffer);

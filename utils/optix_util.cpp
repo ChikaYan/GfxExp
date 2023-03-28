@@ -17,6 +17,7 @@
 */
 
 #include "optix_util_private.h"
+#include <iostream>
 
 namespace optixu {
     void devPrintf(const char* fmt, ...) {
@@ -3173,6 +3174,10 @@ namespace optixu {
     }
 
     void Pipeline::link(uint32_t maxTraceDepth, OptixCompileDebugLevel debugLevel) const {
+        if (m->pipelineLinked){
+            printf("This pipeline has been already linked.");
+            return;
+        }
         m->throwRuntimeError(!m->pipelineLinked, "This pipeline has been already linked.");
 
         OptixPipelineLinkOptions pipelineLinkOptions = {};
@@ -3194,6 +3199,8 @@ namespace optixu {
             &m->rawPipeline));
 
         m->pipelineLinked = true;
+
+        std::cout << "Linking pipeline [" << m << "]: " << m->pipelineLinked << "\n";
     }
 
     void Pipeline::setNumMissRayTypes(uint32_t numMissRayTypes) const {
@@ -3363,6 +3370,8 @@ namespace optixu {
         m->throwRuntimeError(
             m->hitGroupSbt.isValid(),
             "Hitgroup shader binding table is not set.");
+
+        // std::cout << "Pipeline" << m << "link run time: " << m->pipelineLinked << "\n";
         m->throwRuntimeError(
             m->pipelineLinked,
             "Pipeline has not been linked yet.");

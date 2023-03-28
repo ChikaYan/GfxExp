@@ -350,6 +350,9 @@
     <CudaCompile Include="gpu_kernels\optix_pathtracing_kernels.cu">
       <Filter>GPU kernels</Filter>
     </CudaCompile>
+    <CudaCompile Include="gpu_kernels\optix_restir_kernels.cu">
+      <Filter>GPU kernels</Filter>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\common\shaders\drawOptiXResult.frag">

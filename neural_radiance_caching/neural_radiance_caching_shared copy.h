@@ -34,11 +34,6 @@ namespace shared {
             Baseline,
             NRC,
             Visibility,
-            // performInitialRIS,
-            // performInitialAndTemporalRISBiased,
-            // performInitialAndTemporalRISUnbiased,
-            // performSpatialRISBiased,
-            // performSpatialRISUnbiased,
             NumTypes
         } value;
 
@@ -67,7 +62,7 @@ namespace shared {
         return (color.x + color.y + color.z) / 3;
     }
 
-    constexpr uint32_t maxNumRayTypes = 3; // does this need to be changed? what does this effect?
+    constexpr uint32_t maxNumRayTypes = 4;
 
 
 
@@ -713,19 +708,12 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE bool evaluateVisibility(
         dist = 1e+10f;
 
     float visibility = 1.0f;
-    // optixu::trace<shared::VisibilityRayPayloadSignature>(
-    //     plp.f->travHandle,
-    //     shadingPoint, shadowRayDir, 0.0f, dist * 0.9999f, 0.0f,
-    //     0xFF, OPTIX_RAY_FLAG_NONE,
-    //     RayType::Visibility, shared::maxNumRayTypes, RayType::Visibility,
-    //     visibility);
-    shared::VisibilityRayPayloadSignature::trace(
+    optixu::trace<shared::VisibilityRayPayloadSignature>(
         plp.f->travHandle,
         shadingPoint, shadowRayDir, 0.0f, dist * 0.9999f, 0.0f,
         0xFF, OPTIX_RAY_FLAG_NONE,
         RayType::Visibility, shared::maxNumRayTypes, RayType::Visibility,
         visibility);
-
 
     return visibility > 0.0f;
 }
