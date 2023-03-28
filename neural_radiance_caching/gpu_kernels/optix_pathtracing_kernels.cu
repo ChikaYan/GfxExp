@@ -178,7 +178,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performInitialAndTemporalRIS() {
             positionInWorld,
             ul, sampleEnvLight, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
             &lightSample, &probDensity);
-        float3 cont = performDirectLighting<ReSTIRRayType, false>(
+        float3 cont = performDirectLighting<PathTracingRayType, false>(
             positionInWorld, vOutLocal, shadingFrame, bsdf,
             lightSample);
         probDensity *= probToSampleCurLightType;
@@ -205,7 +205,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performInitialAndTemporalRIS() {
     // EN: Set the reservoir's weight to zero so that the occluded sample which has no contribution
     //     will not propagate to neighboring pixels.
     if (plp.f->reuseVisibility && selectedTargetDensity > 0.0f) {
-        if (!evaluateVisibility<ReSTIRRayType>(positionInWorld, reservoir.getSample())) {
+        if (!evaluateVisibility<PathTracingRayType>(positionInWorld, reservoir.getSample())) {
             recPDFEstimate = 0.0f;
             selectedTargetDensity = 0.0f;
         }
@@ -245,7 +245,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performInitialAndTemporalRIS() {
             // TODO: アニメーションやジッタリングがある場合には前フレームの対応ピクセルのターゲットPDFは
             //       変わってしまっているはず。この場合にはUnbiasedにするにはもうちょっと工夫がいる？
             LightSample nbLightSample = neighbor.getSample();
-            float3 cont = performDirectLighting<ReSTIRRayType, false>(
+            float3 cont = performDirectLighting<PathTracingRayType, false>(
                 positionInWorld, vOutLocal, shadingFrame, bsdf, nbLightSample);
             float targetDensity = convertToWeight(cont);
 
@@ -281,7 +281,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performInitialAndTemporalRIS() {
             // JP: まずは現在のピクセルのターゲットPDFに対応する量を計算。
             // EN: First, calculate a quantity corresponding to the current pixel's target PDF.
             {
-                float3 cont = performDirectLighting<ReSTIRRayType, false>(
+                float3 cont = performDirectLighting<PathTracingRayType, false>(
                     positionInWorld, vOutLocal, shadingFrame, bsdf, selectedLightSample);
                 float targetDensityForSelf = convertToWeight(cont);
                 if constexpr (useMIS_RIS) {
@@ -329,7 +329,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performInitialAndTemporalRIS() {
                     //     Temporal Reuseでは前フレームのストリーム長を現在のピクセルの20倍に制限する。
                     // EN: To prevent the weight for previous frames to grow unlimitedly,
                     //     limit the previous frame's weight by 20x of the current pixel's one.
-                    float3 cont = performDirectLighting<ReSTIRRayType, false>(
+                    float3 cont = performDirectLighting<PathTracingRayType, false>(
                         nbPositionInWorld, nbVOutLocal, nbShadingFrame, nbBsdf, selectedLightSample);
                     float nbTargetDensity = convertToWeight(cont);
                     uint32_t nbStreamLength = min(neighbor.getStreamLength(), maxPrevStreamLength);
@@ -473,7 +473,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performSpatialRIS() {
             // EN: Calculate the probability density at the "current" pixel of the candidate sample
             //     the neighboring pixel holds.
             LightSample nbLightSample = neighbor.getSample();
-            float3 cont = performDirectLighting<ReSTIRRayType, false>(
+            float3 cont = performDirectLighting<PathTracingRayType, false>(
                 positionInWorld, vOutLocal, shadingFrame, bsdf, nbLightSample);
             float targetDensity = convertToWeight(cont);
 
@@ -513,10 +513,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performSpatialRIS() {
             {
                 float3 cont;
                 if (plp.f->reuseVisibility)
-                    cont = performDirectLighting<ReSTIRRayType, true>(
+                    cont = performDirectLighting<PathTracingRayType, true>(
                         positionInWorld, vOutLocal, shadingFrame, bsdf, selectedLightSample);
                 else
-                    cont = performDirectLighting<ReSTIRRayType, false>(
+                    cont = performDirectLighting<PathTracingRayType, false>(
                         positionInWorld, vOutLocal, shadingFrame, bsdf, selectedLightSample);
                 float targetDensityForSelf = convertToWeight(cont);
                 if (plp.f->reuseVisibility)
@@ -590,10 +590,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performSpatialRIS() {
                     //       要検討。
                     float3 cont;
                     if (plp.f->reuseVisibility)
-                        cont = performDirectLighting<ReSTIRRayType, true>(
+                        cont = performDirectLighting<PathTracingRayType, true>(
                             nbPositionInWorld, nbVOutLocal, nbShadingFrame, nbBsdf, selectedLightSample);
                     else
-                        cont = performDirectLighting<ReSTIRRayType, false>(
+                        cont = performDirectLighting<PathTracingRayType, false>(
                             nbPositionInWorld, nbVOutLocal, nbShadingFrame, nbBsdf, selectedLightSample);
                     float nbTargetDensity = convertToWeight(cont);
                     uint32_t nbStreamLength = neighbor.getStreamLength();
