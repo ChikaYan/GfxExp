@@ -1,5 +1,6 @@
 ﻿#include "../neural_radiance_caching_shared.h"
 
+
 using namespace shared;
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME(visibility)() {
@@ -495,6 +496,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void performSpatialRIS() {
 
     float weightForEstimate = 0.0f;
     if constexpr (useUnbiasedEstimator) {
+        // printf("unbiased restir rendering!\n");
         if (selectedTargetDensity > 0.0f) {
             // JP: 推定関数をunbiasedとするための、生き残ったサンプルのウェイトを計算する。
             //     ここではReservoirの結合時とは逆に、サンプルは生き残った1つだが、
@@ -664,6 +666,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_raygen_generic() {
     bool isUnbiasedTrainingTile;
     if constexpr (useNRC) {
         const uint2 tileSize = *plp.s->tileSize[bufIdx];
+        // std::cout << "tile size: " << tileSize.x << "," << tileSize.y << "\n";
+        // printf("tile size: [%d, %d]\n", tileSize.x, tileSize.y);
         const uint32_t numPixelsInTile = tileSize.x * tileSize.y;
 
         // JP: 動的サイズのタイルごとに1つトレーニングパスを選ぶ。
