@@ -234,80 +234,6 @@ struct GPUEnvironment {
             p.setShaderBindingTable(pipeline.sbt, pipeline.sbt.getMappedPointer());
         }
 
-        // {
-        //     Pipeline<ReSTIREntryPoint> &pipeline = restir;
-        //     optixu::Pipeline &p = pipeline.optixPipeline;
-        //     optixu::Module &m = pipeline.optixModule;
-        //     p = optixContext.createPipeline();
-
-        //     p.setPipelineOptions(
-        //         std::max({
-        //             shared::VisibilityRayPayloadSignature::numDwords
-        //                  }),
-        //         optixu::calcSumDwords<float2>(),
-        //         "plp", sizeof(shared::PipelineLaunchParameters),
-        //         false, OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        //         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH |
-        //         DEBUG_SELECT(OPTIX_EXCEPTION_FLAG_DEBUG, OPTIX_EXCEPTION_FLAG_NONE),
-        //         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-
-        //     // printf("create module\n");
-        //     m = p.createModuleFromPTXString(
-        //         readTxtFile(getExecutableDirectory() / "neural_radiance_caching/ptxes/optix_restir_kernels.ptx"),
-        //         OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        //         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        //         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-        //     // printf("create entry points\n");
-        //     pipeline.entryPoints[ReSTIREntryPoint::performInitialRIS] =
-        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialRIS"));
-        //     pipeline.entryPoints[ReSTIREntryPoint::performInitialAndTemporalRISBiased] =
-        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialAndTemporalRISBiased"));
-        //     pipeline.entryPoints[ReSTIREntryPoint::performInitialAndTemporalRISUnbiased] =
-        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performInitialAndTemporalRISUnbiased"));
-        //     pipeline.entryPoints[ReSTIREntryPoint::performSpatialRISBiased] =
-        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performSpatialRISBiased"));
-        //     pipeline.entryPoints[ReSTIREntryPoint::performSpatialRISUnbiased] =
-        //         p.createRayGenProgram(m, RT_RG_NAME_STR("performSpatialRISUnbiased"));
-        //     pipeline.entryPoints[ReSTIREntryPoint::shading] =
-        //         p.createRayGenProgram(m, RT_RG_NAME_STR("shading"));
-
-        //     // printf("create miss programe\n");
-        //     pipeline.programs["emptyMiss"] = p.createMissProgram(emptyModule, nullptr);
-        //     pipeline.programs["visibility"] = p.createHitProgramGroupForTriangleIS(
-        //         emptyModule, nullptr,
-        //         m, RT_AH_NAME_STR("visibility"));
-
-        //     p.setNumMissRayTypes(shared::ReSTIRRayType::NumTypes);
-        //     p.setMissProgram(shared::ReSTIRRayType::Visibility, pipeline.programs.at("emptyMiss"));
-
-        //     p.setNumCallablePrograms(NumCallablePrograms);
-        //     pipeline.callablePrograms.resize(NumCallablePrograms);
-        //     for (int i = 0; i < NumCallablePrograms; ++i) {
-        //         optixu::ProgramGroup program = p.createCallableProgramGroup(
-        //             m, callableProgramEntryPoints[i],
-        //             emptyModule, nullptr);
-        //         pipeline.callablePrograms[i] = program;
-        //         p.setCallableProgram(i, program);
-        //     }
-
-        //     std::cout << "linking restir\n";
-        //     p.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-        //     optixDefaultMaterial.setHitGroup(
-        //         shared::ReSTIRRayType::Visibility, pipeline.programs.at("visibility"));
-
-        //     pipeline.programs["emptyHitGroup"] = p.createEmptyHitProgramGroup();
-        //     for (uint32_t rayType = shared::ReSTIRRayType::NumTypes; rayType < shared::maxNumRayTypes; ++rayType)
-        //         optixDefaultMaterial.setHitGroup(rayType, pipeline.programs.at("emptyHitGroup"));
-
-        //     size_t sbtSize;
-        //     p.generateShaderBindingTableLayout(&sbtSize);
-        //     pipeline.sbt.initialize(cuContext, Scene::bufferType, sbtSize, 1);
-        //     pipeline.sbt.setMappedMemoryPersistent(true);
-        //     p.setShaderBindingTable(pipeline.sbt, pipeline.sbt.getMappedPointer());
-        // }
-
         {
             Pipeline<PathTracingEntryPoint> &pipeline = pathTracing;
             optixu::Pipeline &p = pipeline.optixPipeline;
@@ -2683,7 +2609,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // for (int i=0; i<2; ++i) tileSize[i].read(&tileSizeDebug, 1, cuStream);
             // printf("1.tile size: [%d, %d]\n", tileSizeDebug.x, tileSizeDebug.y);
-            
+
             // JP: タイルサイズのアップデートやTraining Suffixの終端情報初期化などを行う。
             // EN: Perform update of the tile size and initialization of training suffixes and so on.
 
@@ -2846,40 +2772,6 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 SPP);
             }
 
-
-            
-            // if ((log_exp) && (saveImgEvery > 0) && (frameIndex % saveImgEvery == 0)) {
-            //     // save imgs 
-            //     CUDADRV_CHECK(cuStreamSynchronize(cuStream));
-            //     auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
-            //     glGetTextureSubImage(
-            //     outputTexture.getHandle(), 0,
-            //     0, 0, 0, renderTargetSizeX, renderTargetSizeY, 1,
-            //     GL_RGBA, GL_FLOAT, sizeof(float4) * renderTargetSizeX * renderTargetSizeY, rawImage);
-
-            //     SDRImageSaverConfig config;
-            //     config.brightnessScale = std::pow(10.0f, brightness);
-            //     config.applyToneMap = applyToneMapAndGammaCorrection;
-            //     config.apply_sRGB_gammaCorrection = applyToneMapAndGammaCorrection;
-            //     // char outpath[50];
-            //     // sprintf(outpath, "%s/%05d.png", exp_path, saveFrameID);
-            //     std::string outpath;
-            //     if (SPP > 1){
-            //         outpath = std::format("{}/{:05d}_{:02d}.png", img_path, frameIndex, spp_i);
-            //     } else {
-            //         outpath = std::format("{}/{:05d}.png", img_path, frameIndex);
-            //     }
-                    
-            //     // ++saveFrameID;
-            //     saveImage(outpath, renderTargetSizeX, renderTargetSizeY, rawImage,
-            //                 config);
-            //     // printf("Saving img to: %s\n", outpath);
-            //     std::cout << outpath << std::endl;
-            //     delete[] rawImage;
-
-            //     // save info
-            //     csvLogger.log(lossValue, curGPUTimer.frame.report());
-            // }
             }
 
 
