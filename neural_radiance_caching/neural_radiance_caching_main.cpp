@@ -834,8 +834,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 
-    int32_t renderTargetSizeX = 1920;
-    int32_t renderTargetSizeY = 1080;
+    int32_t renderTargetSizeX = 1920 /2;
+    int32_t renderTargetSizeY = 1080 /2;
 
     // JP: ウインドウの初期化。
     // EN: Initialize a window.

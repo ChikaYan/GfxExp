@@ -268,3 +268,15 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+
+exp/
+
+build/
+
+.vscode/
+
+denoiser_v2.4/
+
+out/
+
+scene/
