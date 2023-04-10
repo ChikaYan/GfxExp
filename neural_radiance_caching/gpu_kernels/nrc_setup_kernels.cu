@@ -65,9 +65,11 @@ CUDA_DEVICE_KERNEL void accumulateInferredRadianceValues() {
     //     Network prediction is not used in the case where the path ended with Russian roulette or traced
     //     to infinity.
     float3 directCont = plp.s->perFrameContributionBuffer[linearIndex];
+    // perFrameContributionBuffer only written by raygen
     float3 radiance = make_float3(0.0f, 0.0f, 0.0f);
     if (terminalInfo.hasQuery) {
         radiance = max(plp.s->inferredRadianceBuffer[linearIndex], make_float3(0.0f, 0.0f, 0.0f));
+        // inferredRadianceBuffer directly written by NN
         if (plp.f->radianceScale > 0)
             radiance /= plp.f->radianceScale;
 
@@ -77,7 +79,9 @@ CUDA_DEVICE_KERNEL void accumulateInferredRadianceValues() {
         }
     }
     float3 indirectCont = terminalInfo.alpha * radiance;
+    // float3 contribution = directCont;
     float3 contribution = directCont + indirectCont;
+    // float3 contribution = indirectCont;
 
     uint2 pixelIndex = make_uint2(linearIndex % plp.s->imageSize.x,
                                   linearIndex / plp.s->imageSize.x);
@@ -99,7 +103,7 @@ CUDA_DEVICE_KERNEL void propagateRadianceValues() {
         return;
 
     float3 contribution = make_float3(0.0f, 0.0f, 0.0f);
-    if (terminalInfo.hasQuery) {
+    if (terminalInfo.hasQuery) { // what is this? why is it needed? self train?
         uint32_t offset = plp.s->imageSize.x * plp.s->imageSize.y;
         contribution = max(plp.s->inferredRadianceBuffer[offset + linearIndex], make_float3(0.0f, 0.0f, 0.0f));
         if (plp.f->radianceScale > 0)
@@ -118,7 +122,7 @@ CUDA_DEVICE_KERNEL void propagateRadianceValues() {
     uint32_t lastTrainDataIndex = terminalInfo.prevVertexDataIndex;
     while (lastTrainDataIndex != invalidVertexDataIndex) {
         const TrainingVertexInfo &vertexInfo = plp.s->trainVertexInfoBuffer[lastTrainDataIndex];
-        float3 &targetValue = plp.s->trainTargetBuffer[0][lastTrainDataIndex];
+        float3 &targetValue = plp.s->trainTargetBuffer[0][lastTrainDataIndex]; // targetValue point to same memory of plp.s->trainTargetBuffer[0][lastTrainDataIndex]
         float3 indirectCont = vertexInfo.localThroughput * contribution;
         contribution = targetValue + indirectCont;
 

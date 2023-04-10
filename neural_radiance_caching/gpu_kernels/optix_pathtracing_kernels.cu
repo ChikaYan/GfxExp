@@ -764,7 +764,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_raygen_generic() {
                     directContNEE = performDirectLighting<PathTracingRayType, true>(
                         positionInWorld, vOutLocal, shadingFrame, bsdf, lightSample);
             }
-            contribution += alpha * recPDFEstimate * directContNEE;
+            directContNEE *= recPDFEstimate;
+            contribution += alpha * directContNEE;
 
 
 
@@ -870,6 +871,12 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_raygen_generic() {
             rayOrg = woPayload.nextOrigin;
             rayDir = woPayload.nextDirection;
         }
+        // if (launchIndex.y * plp.s->imageSize.x + launchIndex.x == 0){
+        //     printf("old contribution: [%f, %f, %f]\n", contribution.x, contribution.y, contribution.z);
+        //     printf("new contribution: [%f, %f, %f]\n", rwPayload.contribution.x, rwPayload.contribution.y, rwPayload.contribution.z);
+
+        // }
+        // printf("contribution same: %d\n", contribution == rwPayload.contribution);
         contribution = rwPayload.contribution;
 
         plp.s->rngBuffer.write(launchIndex, rwPayload.rng);
@@ -913,6 +920,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_raygen_generic() {
         }
 
         plp.s->perFrameContributionBuffer[linearIndex] = contribution;
+        // what is this contribution here?
     }
     else {
         (void)renderingPathEndsWithCache;
@@ -1113,6 +1121,16 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic() {
     float3 directContNEE = performNextEventEstimation(
         positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
     rwPayload->contribution += rwPayload->alpha * directContNEE;
+
+    // if constexpr (useNRC) {
+    //     // JP: 1つ前の頂点に対する直接照明(Implicit)によるScattered Radianceをターゲット値に加算。
+    //     // EN: Accumulate scattered radiance at the previous vertex by direct lighting (implicit)
+    //     //     to the target value.
+    //     if (rwPayload->isTrainingPath && rwPayload->prevTrainDataIndex != invalidVertexDataIndex) {
+    //         plp.s->trainTargetBuffer[0][rwPayload->prevTrainDataIndex] +=
+    //             rwPayload->prevLocalThroughput * recContinueProb * directContNEE;
+    //     }
+    // }
 
     // generate a next ray.
     float3 vInLocal;
