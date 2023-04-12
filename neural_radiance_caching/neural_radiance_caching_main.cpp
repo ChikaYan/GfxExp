@@ -874,21 +874,45 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             saveImgEvery = std::stol(argv[i + 1]);
             i += 1;
         }
-        else if (0 == strncmp(arg, "-no_nrc", 8)) {
-            useNRC = false;
+        else if (strncmp(arg, "-render_mode", 13) == 0) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            const char* enc = argv[i + 1];
+            if (strncmp(enc, "pt", 2) == 0) {
+                useNRC = false;
+            }
+            else if (strncmp(enc, "nrc_only_raw", 12) == 0) {
+                bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
+                nrc_only_raw = true;
+            }
+            else if (strncmp(enc, "nrc_only", 8) == 0) {
+                bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
+            }
+            else if (strncmp(enc, "nrc", 3) == 0) {
+            }
+            else {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            i += 1;
         }
-        else if (0 == strncmp(arg, "-nrc_only", 10)) {
-            bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-        }
-        else if (0 == strncmp(arg, "-nrc_only_raw", 14)) {
-            bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-            nrc_only_raw = true;
-        }
+        // else if (0 == strncmp(arg, "-no_nrc", 8)) {
+        //     useNRC = false;
+        // }
+        // else if (0 == strncmp(arg, "-nrc_only", 10)) {
+        //     bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
+        // }
+        // else if (0 == strncmp(arg, "-nrc_only_raw", 14)) {
+        //     bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
+        //     nrc_only_raw = true;
+        // }
         else if (0 == strncmp(arg, "-unbiased_restir", 17)) {
             curRenderer = ReSTIRRenderer::OriginalReSTIRUnbiased;
         }
         else {
-            printf("Unknown option.\n");
+            printf("Unknown option: %s.\n", arg);
             exit(EXIT_FAILURE);
         }
     }

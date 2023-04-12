@@ -3,6 +3,7 @@ import imageio
 import numpy as np
 from pathlib import Path
 from py_script.log_parser import log_parse
+import yaml
 
 def cmd(command):
     print(command)

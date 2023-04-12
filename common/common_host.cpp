@@ -8,6 +8,8 @@
 #include "tinyexr.h"
 #include "../ext/stb_image_write.h"
 
+#include <iostream>
+
 void devPrintf(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -1989,6 +1991,15 @@ void createTriangleMeshes(
                     immSmoothness,
                     normalPath,
                     emittancePath, immEmittance);
+                // std::cout << "===================================\n";
+                // std::cout << "diffuseColorPath: " << diffuseColorPath << "\n";
+                // std::cout << "immDiffuseColor: " << immDiffuseColor.x << "," <<immDiffuseColor.y << "," << immDiffuseColor.z << "\n";
+                // std::cout << "specularColorPath: " << specularColorPath << "\n";
+                // std::cout << "immSpecularColor: " << immSpecularColor.x << "," <<immSpecularColor.y << "," << immSpecularColor.z << "\n";
+                // std::cout << "normalPath: " << normalPath << "\n";
+                // std::cout << "emittancePath: " << emittancePath << "\n";
+                // std::cout << "immEmittance: " << immEmittance.x << "," <<immEmittance.y << "," << immEmittance.z << "\n";
+                // std::cout << "===================================\n";
             }
         }
         else {
@@ -2003,6 +2014,17 @@ void createTriangleMeshes(
                 specularColorPath, immSpecularColor,
                 normalPath,
                 emittancePath, immEmittance);
+
+                // std::cout << "===================================\n";
+                // std::cout << "diffuseColorPath: " << diffuseColorPath << "\n";
+                // std::cout << "immDiffuseColor: " << immDiffuseColor.x << "," <<immDiffuseColor.y << "," << immDiffuseColor.z << "\n";
+                // std::cout << "specularColorPath: " << specularColorPath << "\n";
+                // std::cout << "immSpecularColor: " << immSpecularColor.x << "," <<immSpecularColor.y << "," << immSpecularColor.z << "\n";
+                // std::cout << "normalPath: " << normalPath << "\n";
+                // std::cout << "emittancePath: " << emittancePath << "\n";
+                // std::cout << "immEmittance: " << immEmittance.x << "," <<immEmittance.y << "," << immEmittance.z << "\n";
+                // std::cout << "===================================\n";
+
         }
 
         scene->materials.push_back(mat);
