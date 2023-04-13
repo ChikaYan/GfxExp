@@ -6,7 +6,10 @@ def cmd(command):
     print(command)
     os.system(command)
 
-CONF_NAME = "bistro/pt256"
+CONF_NAME = "bistro/nrc64"
+CONF_NAME = "bistro/short_path/nrc_only_emit"
+# CONF_NAME = "bistro/nrc_only_emit"
+# CONF_NAME = "living_room/nrc_only_tri"
 
 EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
 CONF_PATH = f"configs/{CONF_NAME}.yaml"
@@ -41,12 +44,11 @@ with open(f"./exp/{conf['exp_name']}/config.yaml", "w") as f:
 
 
 
-ex_conf = conf.get('no_cmd', {})
+ex_conf = conf.get('no-cmd', {})
 if ex_conf.get('parse_tb', True):
     log_parse(
         exp_path=f"C:/nonsys/workspace/GfxExp/exp/{conf['exp_name']}", 
         gt_dir=ex_conf.get('gt_dir', None),
-        log_gt= ex_conf.get('log_gt', False)
         )
 
 

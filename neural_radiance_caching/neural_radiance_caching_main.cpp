@@ -390,29 +390,41 @@ struct GPUEnvironment {
 
 class CsvLogger{
     public:
-        std::ofstream log_file;
-        std::string log_path;
+        std::ofstream logFile;
+        std::string logPath;
 
-    CsvLogger(std::string log_path){
-        this->log_path = log_path;
-        std::cout << "Logging at: " << log_path << std::endl;
-        log_file.open(log_path);
+    CsvLogger(std::string logPath){
+        this->logPath = logPath;
+        std::cout << "Logging at: " << logPath << std::endl;
+        logFile.open(logPath);
         // write header
-        log_file << "loss, time" << "\n";
-        // log_file.close();
+        logFile << "id, loss, time/all, time/restir, time/path_tracing, time/nrc_infer, time/nrc_train" << "\n";
+        // logFile.close();
     }
 
     void log(
+        int id,
         float loss,
-        float frame_time
+        float time_all,
+        float time_restir,
+        float time_path_tracing,
+        float time_nrc_infer,
+        float time_nrc_train
     ){
-        // log_file.open(log_path, std::ios_base::app);
-        log_file << loss << "," << frame_time << "\n";
-        // log_file.close();
+        // logFile.open(logPath, std::ios_base::app);
+        logFile << id << ",";
+        logFile << loss << ","; 
+        logFile << time_all << ","; 
+        logFile << time_restir << ","; 
+        logFile << time_path_tracing << ","; 
+        logFile << time_nrc_infer << ","; 
+        logFile << time_nrc_train;
+        logFile << "\n";
+        // logFile.close();
     }
 
     ~CsvLogger(){
-        log_file.close();
+        logFile.close();
     }
 
 };
@@ -483,7 +495,8 @@ static long rngSeed = 591842031321323413;
 static int32_t maxPathLength = 5;
 static int32_t SPP = 1;
 static shared::BufferToDisplay bufferTypeToDisplay = shared::BufferToDisplay::NoisyBeauty;
-static bool nrc_only_raw = false; // show raw output of network without factorization
+static bool nrcOnlyRaw = false; // show raw output of network without factorization
+static bool nrcOnlyEmissive = false; // also add emmisive term to nrc only result
 
 static uint64_t frameStop = 50;
 static uint64_t saveImgEvery = 1;
@@ -885,7 +898,11 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             }
             else if (strncmp(enc, "nrc_only_raw", 12) == 0) {
                 bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-                nrc_only_raw = true;
+                nrcOnlyRaw = true;
+            }
+            else if (strncmp(enc, "nrc_only_emit", 13) == 0) {
+                bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
+                nrcOnlyEmissive = true;
             }
             else if (strncmp(enc, "nrc_only", 8) == 0) {
                 bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
@@ -906,7 +923,7 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
         // }
         // else if (0 == strncmp(arg, "-nrc_only_raw", 14)) {
         //     bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-        //     nrc_only_raw = true;
+        //     nrcOnlyRaw = true;
         // }
         else if (0 == strncmp(arg, "-unbiased_restir", 17)) {
             curRenderer = ReSTIRRenderer::OriginalReSTIRUnbiased;
@@ -1881,21 +1898,19 @@ int32_t main(int32_t argc, const char* argv[]) try {
     uint32_t numAccumFrames = 0;
     uint32_t saveFrameID = 0;
     // std::string exp_name = "test";
-    std::string exp_path = "exp/" + exp_name;
-    std::string img_path = exp_path + "/imgs";
-    const bool log_exp = true;
+    std::string expPath = "exp/" + exp_name;
+    std::string imgPath = expPath + "/imgs";
+    const bool logExp = true;
 
     uint32_t lastSpatialNeighborBaseIndex = 0;
     uint32_t lastReservoirIndex = 1;
 
-    std::filesystem::create_directories(img_path);
+    std::filesystem::create_directories(imgPath);
     
-    CsvLogger csvLogger = CsvLogger(exp_path + "/log.csv");
+    CsvLogger csvLogger = CsvLogger(expPath + "/log.csv");
 
-    // gpuEnv.restir.optixPipeline.link(1, DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-    // link restir again -- very weird, I don't know why it is needed
 
-    while ( (frameStop < 0) || (frameIndex < frameStop)) {
+    while ( (frameStop < 0) || (frameIndex <= frameStop)) {
     // while (true){
         uint32_t bufferIndex = frameIndex % 2;
 
@@ -2864,7 +2879,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             bufferToDisplay, bufferTypeToDisplay,
             0.5f, std::pow(10.0f, motionVectorScale),
             outputBufferSurfaceHolder.getNext(),
-            nrc_only_raw);
+            nrcOnlyRaw,
+            nrcOnlyEmissive);
 
         outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
 
@@ -2912,7 +2928,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         glfwSwapBuffers(window);
 
         // logging
-        if ((log_exp) && (saveImgEvery > 0) && (frameIndex % saveImgEvery == 0)) {
+        if ((logExp) && (saveImgEvery > 0) && (frameIndex % saveImgEvery == 0)) {
             // save imgs 
             CUDADRV_CHECK(cuStreamSynchronize(cuStream));
             auto rawImage = new float4[renderTargetSizeX * renderTargetSizeY];
@@ -2926,9 +2942,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             config.applyToneMap = applyToneMapAndGammaCorrection;
             config.apply_sRGB_gammaCorrection = applyToneMapAndGammaCorrection;
             // char outpath[50];
-            // sprintf(outpath, "%s/%05d.png", exp_path, saveFrameID);
+            // sprintf(outpath, "%s/%05d.png", expPath, saveFrameID);
             std::string outpath;
-            outpath = std::format("{}/{:05d}.png", img_path, frameIndex);
+            outpath = std::format("{}/{:05d}.png", imgPath, frameIndex);
                 
             // ++saveFrameID;
             saveImage(outpath, renderTargetSizeX, renderTargetSizeY, rawImage,
@@ -2938,7 +2954,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
             delete[] rawImage;
 
             // save info
-            csvLogger.log(lossValue, curGPUTimer.frame.report());
+            csvLogger.log(
+                frameIndex, 
+                lossValue, 
+                curGPUTimer.frame.report(), 
+                curGPUTimer.performInitialAndTemporalRIS.report() + curGPUTimer.performSpatialRIS.report(),
+                curGPUTimer.pathTrace.report(),
+                curGPUTimer.infer.report() + curGPUTimer.accumulateInferredRadiances.report(),
+                curGPUTimer.propagateRadiances.report() + curGPUTimer.shuffleTrainingData.report() + curGPUTimer.train.report()
+                );
         }
 
         ++frameIndex;

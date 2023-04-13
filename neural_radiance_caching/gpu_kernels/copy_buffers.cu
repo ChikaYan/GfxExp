@@ -84,7 +84,8 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     void* linearBuffer, BufferToDisplay bufferTypeToDisplay,
     float motionVectorOffset, float motionVectorScale,
     optixu::NativeBlockBuffer2D<float4> outputBuffer,
-    bool raw_network_output) {
+    bool rawNetworkOutput,
+    bool nrcOnlyEmissive) {
     uint2 launchIndex = make_uint2(blockDim.x * blockIdx.x + threadIdx.x,
                                    blockDim.y * blockIdx.y + threadIdx.y);
     if (launchIndex.x >= plp.s->imageSize.x ||
@@ -107,13 +108,17 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
                     radiance /= plp.f->radianceScale;
 
                 if constexpr (useReflectanceFactorization) {
-                    if (!raw_network_output){
+                    if (!rawNetworkOutput){
                         const RadianceQuery &terminalQuery = plp.s->inferenceRadianceQueryBuffer[linearIndex];
                         radiance *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
                     }
                 }
             }
-            value = make_float4(terminalInfo.alpha * radiance, 1.0f); // what is alpha? Why needed?
+            if (nrcOnlyEmissive){
+                value = make_float4(terminalInfo.alpha * radiance + plp.s->perFrameContributionBuffer[linearIndex], 1.0f); // terminalInfo.alpha is always 1.f
+            } else {
+                value = make_float4(terminalInfo.alpha * radiance, 1.0f); // terminalInfo.alpha is always 1.f
+            }
         }
         else {
             auto typedLinearBuffer = reinterpret_cast<const float4*>(linearBuffer);
