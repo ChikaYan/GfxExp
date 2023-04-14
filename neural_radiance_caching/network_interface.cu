@@ -45,7 +45,7 @@ NeuralRadianceCache::~NeuralRadianceCache() {
     delete m;
 }
 
-void NeuralRadianceCache::initialize(PositionEncoding posEnc, uint32_t numHiddenLayers, float learningRate) {
+void NeuralRadianceCache::initialize(NeuralRadianceCacheConfig NRCConfig) {
     json config = {
         {"loss", {
             {"otype", "RelativeL2Luminance"}
@@ -55,7 +55,7 @@ void NeuralRadianceCache::initialize(PositionEncoding posEnc, uint32_t numHidden
             {"decay", 0.99f},
             {"nested", {
                 {"otype", "Adam"},
-                {"learning_rate", learningRate},
+                {"learning_rate", NRCConfig.learningRate},
                 {"beta1", 0.9f},
                 {"beta2", 0.99f},
                 {"l2_reg", 1e-6f},
@@ -64,13 +64,13 @@ void NeuralRadianceCache::initialize(PositionEncoding posEnc, uint32_t numHidden
         {"network", {
             {"otype", "FullyFusedMLP"},
             {"n_neurons", 64},
-            {"n_hidden_layers", numHiddenLayers},
+            {"n_hidden_layers", NRCConfig.numHiddenLayers},
             {"activation", "ReLU"},
             {"output_activation", "None"},
         }}
     };
 
-    if (posEnc == PositionEncoding::TriangleWave) {
+    if (NRCConfig.posEnc == PositionEncoding::TriangleWave) {
         //config["encoding"] = { {"otype", "NRC"} };
         config["encoding"] = {
             {"otype", "Composite"},
@@ -78,7 +78,7 @@ void NeuralRadianceCache::initialize(PositionEncoding posEnc, uint32_t numHidden
                 {
                     {"n_dims_to_encode", 3},
                     {"otype", "TriangleWave"},
-                    {"n_frequencies", 12},
+                    {"n_frequencies", NRCConfig.triNFrequency},
                 },
                 {
                     {"n_dims_to_encode", 5},
@@ -93,7 +93,7 @@ void NeuralRadianceCache::initialize(PositionEncoding posEnc, uint32_t numHidden
         };
         config["optimizer"]["nested"]["epsilon"] = 1e-8f;
     }
-    else if (posEnc == PositionEncoding::HashGrid) {
+    else if (NRCConfig.posEnc == PositionEncoding::HashGrid) {
         config["encoding"] = {
             {"otype", "Composite"},
             {"nested", {
@@ -103,7 +103,7 @@ void NeuralRadianceCache::initialize(PositionEncoding posEnc, uint32_t numHidden
                     {"per_level_scale", 2.0f},
                     {"log2_hashmap_size", 15},
                     {"base_resolution", 16},
-                    {"n_levels", 16},
+                    {"n_levels", NRCConfig.hashNLevels},
                     {"n_features_per_level", 2},
                 },
                 {

@@ -7,6 +7,14 @@ enum class PositionEncoding {
     HashGrid,
 };
 
+struct NeuralRadianceCacheConfig {
+    PositionEncoding posEnc = PositionEncoding::HashGrid;
+    uint32_t numHiddenLayers = 5;
+    float learningRate = 1e-2f;
+    uint32_t hashNLevels = 16;
+    uint32_t triNFrequency = 12;
+};
+
 // JP: サンプルプログラム全体をnvcc経由でコンパイルしないといけない状況を避けるため、
 //     pimplイディオムによってtiny-cuda-nnをcpp側に隔離する。
 // EN: Isolate the tiny-cuda-nn into the cpp side by pimpl idiom to avoid the situation where
@@ -19,7 +27,7 @@ public:
     NeuralRadianceCache();
     ~NeuralRadianceCache();
 
-    void initialize(PositionEncoding posEnc, uint32_t numHiddenLayers, float learningRate);
+    void initialize(NeuralRadianceCacheConfig config);
     void finalize();
 
     void infer(CUstream stream, float* inputData, uint32_t numData, float* predictionData);

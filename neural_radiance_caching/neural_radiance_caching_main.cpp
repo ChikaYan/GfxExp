@@ -498,6 +498,8 @@ static shared::BufferToDisplay bufferTypeToDisplay = shared::BufferToDisplay::No
 static bool nrcOnlyRaw = false; // show raw output of network without factorization
 static bool nrcOnlyEmissive = false; // also add emmisive term to nrc only result
 
+static NeuralRadianceCacheConfig NRCConfig;
+
 static uint64_t frameStop = 50;
 static uint64_t saveImgEvery = 1;
 
@@ -885,6 +887,22 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
                 exit(EXIT_FAILURE);
             }
             saveImgEvery = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-hash_n_levels", 15)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            NRCConfig.hashNLevels = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-tri_n_frequency", 17)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            NRCConfig.triNFrequency = std::stol(argv[i + 1]);
             i += 1;
         }
         else if (strncmp(arg, "-render_mode", 13) == 0) {
@@ -1336,7 +1354,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
 
     NeuralRadianceCache neuralRadianceCache;
-    neuralRadianceCache.initialize(g_positionEncoding, g_numHiddenLayers, g_learningRate);
+    NRCConfig.posEnc = g_positionEncoding;
+    NRCConfig.numHiddenLayers = g_numHiddenLayers;
+    NRCConfig.learningRate = g_learningRate;
+
+    neuralRadianceCache.initialize(NRCConfig);
 
     // END: Initialize NRC training-related buffers.
     // ----------------------------------------------------------------
@@ -2356,7 +2378,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             g_learningRate != prevLearningRate;
                         if (resetNN) {
                             neuralRadianceCache.finalize();
-                            neuralRadianceCache.initialize(g_positionEncoding, g_numHiddenLayers, g_learningRate);
+                            NRCConfig.posEnc = g_positionEncoding;
+                            NRCConfig.numHiddenLayers = g_numHiddenLayers;
+                            NRCConfig.learningRate = g_learningRate;
+                            neuralRadianceCache.initialize(NRCConfig);
                             resetAccumulation = true;
                         }
                     }
