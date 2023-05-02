@@ -22,7 +22,7 @@ def cmd(command, verbose=True):
 def log_parse(
         exp_path=None, no_clean_event=False, 
         denoiser_path = 'C:/nonsys/workspace/GfxExp/denoiser_v2.4/Denoiser.exe',
-        gt_dir = "C:/nonsys/workspace/GfxExp/exp/pt_res_64_avg/denoised_imgs",
+        gt_dir = "C:/nonsys/workspace/GfxExp/exp/pt_res_64_avg",
         output_vid=True,
     ):
 
@@ -70,24 +70,34 @@ def log_parse(
         img = imageio.imread(img_list[i])[..., :3]
         summary_writer.add_image('raw_frame', img, global_step=img_idx, dataformats='HWC')
 
-        if Path(f'{gt_dir}/{img_idx:05d}.png').exists():
-            dn_gt = imageio.imread(f'{gt_dir}/{img_idx:05d}.png')[..., :3]
+        gt_raw_dir = gt_dir + '/imgs'
+        gt_denoise_dir = gt_dir + '/denoised_imgs'
+
+        if Path(f'{gt_denoise_dir}/{img_idx:05d}.png').exists():
+            dn_gt = imageio.imread(f'{gt_denoise_dir}/{img_idx:05d}.png')[..., :3]
+            raw_gt = imageio.imread(f'{gt_raw_dir}/{img_idx:05d}.png')[..., :3]
 
             stats_dn = {}
 
             dn_img = dn_img / 255.
-            img = img / 255.
+            raw_img = img / 255.
+            raw_gt = raw_gt / 255.
             dn_gt = dn_gt / 255.
             
             dn_mse = ((dn_img - dn_gt)**2).mean()
-            stats_dn['mse'] = dn_mse
-            stats_dn['psnr'] = -10.0 * np.log10(dn_mse)
-            stats_dn['ssim'] = ssim_fn((dn_img*255).astype(np.uint8), (dn_gt*255).astype(np.uint8), channel_axis=2, data_range=255)
+            stats_dn['denoised/mse'] = dn_mse
+            stats_dn['denoised/psnr'] = -10.0 * np.log10(dn_mse)
+            stats_dn['denoised/ssim'] = ssim_fn((dn_img*255).astype(np.uint8), (dn_gt*255).astype(np.uint8), channel_axis=2, data_range=255)
+
+            raw_mse = ((raw_img - raw_gt)**2).mean()
+            stats_dn['raw/mse'] = raw_mse
+            stats_dn['raw/psnr'] = -10.0 * np.log10(raw_mse)
+            stats_dn['raw/ssim'] = ssim_fn((raw_img*255).astype(np.uint8), (raw_gt*255).astype(np.uint8), channel_axis=2, data_range=255)
 
             # compute flip
             cmd(f'python C:/nonsys/workspace/GfxExp/flip/python/flip.py \
                 --test {exp_dir}/denoised_imgs/{img_idx:05d}.png \
-                --reference {gt_dir}/{img_idx:05d}.png \
+                --reference {gt_denoise_dir}/{img_idx:05d}.png \
                 -d {exp_dir}/flip -txt \
                 -b {img_idx:05d} -v 0', verbose=False)
             
@@ -95,11 +105,22 @@ def log_parse(
             flip_txt_path = Path(f'{exp_dir}/flip') / f'{img_idx:05d}.txt'
             with flip_txt_path.open('r') as f:
                 lines = f.readlines()
-                stats_dn['flip_mean'] = float(lines[0].split(':')[-1].strip())
-                stats_dn['flip_med'] = float(lines[1].split(':')[-1].strip())
+                stats_dn['denoised/flip_mean'] = float(lines[0].split(':')[-1].strip())
+                stats_dn['denoised/flip_med'] = float(lines[1].split(':')[-1].strip())
+
+            cmd(f'python C:/nonsys/workspace/GfxExp/flip/python/flip.py \
+                --test {exp_dir}/imgs/{img_idx:05d}.png \
+                --reference {gt_raw_dir}/{img_idx:05d}.png \
+                -d {exp_dir}/flip_raw -txt \
+                -b {img_idx:05d} -v 0', verbose=False)
+            flip_txt_path = Path(f'{exp_dir}/flip_raw') / f'{img_idx:05d}.txt'
+            with flip_txt_path.open('r') as f:
+                lines = f.readlines()
+                stats_dn['raw/flip_mean'] = float(lines[0].split(':')[-1].strip())
+                stats_dn['raw/flip_med'] = float(lines[1].split(':')[-1].strip())
 
             for k in stats_dn:
-                summary_writer.add_scalar(f'denoised/{k}', stats_dn[k], global_step=img_idx)
+                summary_writer.add_scalar(f'{k}', stats_dn[k], global_step=img_idx)
 
 
     if output_vid:

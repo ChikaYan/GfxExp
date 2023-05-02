@@ -905,6 +905,14 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             NRCConfig.triNFrequency = std::stol(argv[i + 1]);
             i += 1;
         }
+        else if (0 == strncmp(arg, "-net_width", 11)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            NRCConfig.hiddenLayerWidth = std::stol(argv[i + 1]);
+            i += 1;
+        }
         else if (strncmp(arg, "-render_mode", 13) == 0) {
             if (i + 1 >= argc) {
                 printf("Invalid option.\n");

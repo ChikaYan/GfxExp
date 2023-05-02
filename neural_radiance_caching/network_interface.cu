@@ -63,7 +63,7 @@ void NeuralRadianceCache::initialize(NeuralRadianceCacheConfig NRCConfig) {
         }},
         {"network", {
             {"otype", "FullyFusedMLP"},
-            {"n_neurons", 64},
+            {"n_neurons", NRCConfig.hiddenLayerWidth},
             {"n_hidden_layers", NRCConfig.numHiddenLayers},
             {"activation", "ReLU"},
             {"output_activation", "None"},
