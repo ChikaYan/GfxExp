@@ -72,10 +72,19 @@ CUDA_DEVICE_KERNEL void accumulateInferredRadianceValues() {
         // inferredRadianceBuffer directly written by NN
         if (plp.f->radianceScale > 0)
             radiance /= plp.f->radianceScale;
+            
 
         if constexpr (useReflectanceFactorization) {
             const RadianceQuery &terminalQuery = plp.s->inferenceRadianceQueryBuffer[linearIndex];
-            radiance *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
+            if (!plp.f->useSeparateNRC){
+                radiance *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
+            }
+            else {
+                float3 radiance2 = max(plp.s->inferredRadianceBuffer2[linearIndex], make_float3(0.0f, 0.0f, 0.0f));
+                if (plp.f->radianceScale > 0) 
+                    radiance2 /= plp.f->radianceScale;
+                radiance = (radiance * terminalQuery.diffuseReflectance + radiance2 * terminalQuery.specularReflectance);
+            }
         }
     }
     float3 indirectCont = terminalInfo.alpha * radiance;
@@ -111,7 +120,15 @@ CUDA_DEVICE_KERNEL void propagateRadianceValues() {
 
         if constexpr (useReflectanceFactorization) {
             const RadianceQuery &terminalQuery = plp.s->inferenceRadianceQueryBuffer[offset + linearIndex];
-            contribution *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
+            if (!plp.f->useSeparateNRC){
+                contribution *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
+            }
+            else {
+                float3 contribution2 = max(plp.s->inferredRadianceBuffer2[offset + linearIndex], make_float3(0.0f, 0.0f, 0.0f));
+                if (plp.f->radianceScale > 0) 
+                    contribution2 /= plp.f->radianceScale;
+                contribution = (contribution * terminalQuery.diffuseReflectance + contribution2 * terminalQuery.specularReflectance);
+            }
         }
     }
 
@@ -129,7 +146,13 @@ CUDA_DEVICE_KERNEL void propagateRadianceValues() {
         if constexpr (useReflectanceFactorization) {
             const RadianceQuery &query = plp.s->trainRadianceQueryBuffer[0][lastTrainDataIndex];
             float3 refFactor = query.diffuseReflectance + query.specularReflectance;
-            targetValue = safeDivide(contribution, refFactor);
+            if (!plp.f->useSeparateNRC){
+                targetValue = safeDivide(contribution, refFactor);
+            }
+            else {
+                // for separate NRC setting, factorization will be undo later
+                targetValue = contribution;
+            }
         }
         else {
             targetValue = contribution;
@@ -214,4 +237,37 @@ CUDA_DEVICE_KERNEL void shuffleTrainingData() {
         plp.s->trainRadianceQueryBuffer[1][linearIndex] = query;
         plp.s->trainTargetBuffer[1][linearIndex] = make_float3(0.0f, 0.0f, 0.0f);
     }
+}
+
+CUDA_DEVICE_KERNEL void decomposeTrainingData(
+    float3* targetData,
+    float3* partialPredData,
+    bool target_diffuse
+) {
+    uint32_t linearIndex = blockDim.x * blockIdx.x + threadIdx.x;
+    uint32_t bufIdx = plp.f->bufferIndex;
+    uint32_t numTrainingData = *plp.s->numTrainingData[bufIdx];
+
+    if (linearIndex > numTrainingData) return;
+
+    RadianceQuery query = plp.s->trainRadianceQueryBuffer[1][linearIndex];
+
+    // if (linearIndex == 0){
+    //     printf("partialPredData: [%f, %f, %f]\n", partialPredData[linearIndex].x, partialPredData[linearIndex].y ,partialPredData[linearIndex].z);
+    // }
+    // if (linearIndex == 0){
+    //     printf("targetData: [%f, %f, %f]\n", targetData[linearIndex].x, targetData[linearIndex].y ,targetData[linearIndex].z);
+    // }
+    if (target_diffuse){
+        partialPredData[linearIndex] = safeDivide(targetData[linearIndex] - partialPredData[linearIndex] * query.specularReflectance, query.diffuseReflectance);
+    } else {
+        partialPredData[linearIndex] = safeDivide(targetData[linearIndex] - partialPredData[linearIndex] * query.diffuseReflectance, query.specularReflectance);
+    }
+
+
+
+    if (linearIndex == 0){
+        printf("train target: [%f, %f, %f]\n", partialPredData[linearIndex].x, partialPredData[linearIndex].y ,partialPredData[linearIndex].z);
+    }
+
 }

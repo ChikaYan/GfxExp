@@ -121,6 +121,7 @@ struct GPUEnvironment {
     cudau::Kernel kernelPreprocessNRC;
     cudau::Kernel kernelAccumulateInferredRadianceValues;
     cudau::Kernel kernelPropagateRadianceValues;
+    cudau::Kernel kernelDecomposeTrainingData;
     cudau::Kernel kernelShuffleTrainingData;
     CUdeviceptr plpPtr;
 
@@ -163,6 +164,8 @@ struct GPUEnvironment {
             cudau::Kernel(cudaModule, "accumulateInferredRadianceValues", cudau::dim3(32), 0);
         kernelPropagateRadianceValues =
             cudau::Kernel(cudaModule, "propagateRadianceValues", cudau::dim3(32), 0);
+        kernelDecomposeTrainingData =
+            cudau::Kernel(cudaModule, "decomposeTrainingData", cudau::dim3(32), 0);
         kernelShuffleTrainingData =
             cudau::Kernel(cudaModule, "shuffleTrainingData", cudau::dim3(32), 0);
 
@@ -504,6 +507,10 @@ static uint64_t frameStop = 50;
 static uint64_t saveImgEvery = 1;
 
 static bool g_takeScreenShot = false;
+
+static bool useSeparateNRC = false;
+
+static float log10RadianceScale = 1.f;
 
 static ReSTIRRenderer curRenderer = ReSTIRRenderer::OriginalReSTIRBiased;
 
@@ -913,6 +920,17 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             NRCConfig.hiddenLayerWidth = std::stol(argv[i + 1]);
             i += 1;
         }
+        else if (0 == strncmp(arg, "-radiance_scale", 16)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            log10RadianceScale = std::atof(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-use_separate_nrc", 18)) {
+            useSeparateNRC = true;
+        }
         else if (strncmp(arg, "-render_mode", 13) == 0) {
             if (i + 1 >= argc) {
                 printf("Invalid option.\n");
@@ -922,18 +940,23 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             if (strncmp(enc, "pt", 2) == 0) {
                 useNRC = false;
             }
+            else if (strncmp(enc, "separate_nrc_diffuse", 20) == 0) {
+                bufferTypeToDisplay = shared::BufferToDisplay::SeparateNRCDiffuse;
+            }
+            else if (strncmp(enc, "separate_nrc_specular", 21) == 0) {
+                bufferTypeToDisplay = shared::BufferToDisplay::SeparateNRCSpecular;
+            }
             else if (strncmp(enc, "nrc_only_raw", 12) == 0) {
-                bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-                nrcOnlyRaw = true;
+                bufferTypeToDisplay = shared::BufferToDisplay::NRCOnlyRaw;
             }
             else if (strncmp(enc, "nrc_only_emit", 13) == 0) {
-                bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-                nrcOnlyEmissive = true;
+                bufferTypeToDisplay = shared::BufferToDisplay::NRCOnlyEmissive;
             }
             else if (strncmp(enc, "nrc_only", 8) == 0) {
-                bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
+                bufferTypeToDisplay = shared::BufferToDisplay::NRCOnly;
             }
             else if (strncmp(enc, "nrc", 3) == 0) {
+                bufferTypeToDisplay = shared::BufferToDisplay::NoisyBeauty;
             }
             else {
                 printf("Invalid option.\n");
@@ -941,16 +964,6 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             }
             i += 1;
         }
-        // else if (0 == strncmp(arg, "-no_nrc", 8)) {
-        //     useNRC = false;
-        // }
-        // else if (0 == strncmp(arg, "-nrc_only", 10)) {
-        //     bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-        // }
-        // else if (0 == strncmp(arg, "-nrc_only_raw", 14)) {
-        //     bufferTypeToDisplay = shared::BufferToDisplay::DirectlyVisualizedPrediction;
-        //     nrcOnlyRaw = true;
-        // }
         else if (0 == strncmp(arg, "-unbiased_restir", 17)) {
             curRenderer = ReSTIRRenderer::OriginalReSTIRUnbiased;
         }
@@ -1335,6 +1348,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::TypedBuffer<shared::RadianceQuery> trainRadianceQueryBuffer[2];
     cudau::TypedBuffer<float3> trainTargetBuffer[2];
+    cudau::TypedBuffer<float3> separateNrcBuffer;
     cudau::TypedBuffer<shared::TrainingVertexInfo> trainVertexInfoBuffer;
     cudau::TypedBuffer<shared::TrainingSuffixTerminalInfo> trainSuffixTerminalInfoBuffer;
     cudau::TypedBuffer<shared::LinearCongruentialGenerator> dataShufflerBuffer;
@@ -1344,6 +1358,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         trainTargetBuffer[i].initialize(
             gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
     }
+    separateNrcBuffer.initialize(
+        gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
     trainVertexInfoBuffer.initialize(
         gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
     trainSuffixTerminalInfoBuffer.initialize(
@@ -1362,11 +1378,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
 
     NeuralRadianceCache neuralRadianceCache;
+    NeuralRadianceCache neuralRadianceCache2;
     NRCConfig.posEnc = g_positionEncoding;
     NRCConfig.numHiddenLayers = g_numHiddenLayers;
     NRCConfig.learningRate = g_learningRate;
 
     neuralRadianceCache.initialize(NRCConfig);
+    neuralRadianceCache2.initialize(NRCConfig);
 
     // END: Initialize NRC training-related buffers.
     // ----------------------------------------------------------------
@@ -1418,6 +1436,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<shared::RadianceQuery> inferenceRadianceQueryBuffer;
     cudau::TypedBuffer<shared::TerminalInfo> inferenceTerminalInfoBuffer;
     cudau::TypedBuffer<float3> inferredRadianceBuffer;
+    cudau::TypedBuffer<float3> inferredRadianceBuffer2;
     cudau::TypedBuffer<float3> perFrameContributionBuffer;
 
     const auto initializeScreenRelatedBuffers = [&]() {
@@ -1492,12 +1511,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         inferenceTerminalInfoBuffer.initialize(gpuEnv.cuContext, Scene::bufferType, numPixels);
         inferredRadianceBuffer.initialize(
             gpuEnv.cuContext, Scene::bufferType, inferenceBatchSize);
+        inferredRadianceBuffer2.initialize(
+            gpuEnv.cuContext, Scene::bufferType, inferenceBatchSize);
         perFrameContributionBuffer.initialize(gpuEnv.cuContext, Scene::bufferType, numPixels);
     };
 
     const auto finalizeScreenRelatedBuffers = [&]() {
         perFrameContributionBuffer.finalize();
         inferredRadianceBuffer.finalize();
+        inferredRadianceBuffer2.finalize();
         inferenceTerminalInfoBuffer.finalize();
         inferenceRadianceQueryBuffer.finalize();
 
@@ -1565,6 +1587,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         inferenceRadianceQueryBuffer.resize(inferenceBatchSize);
         inferenceTerminalInfoBuffer.resize(numPixels);
         inferredRadianceBuffer.resize(inferenceBatchSize);
+        inferredRadianceBuffer2.resize(inferenceBatchSize);
         perFrameContributionBuffer.resize(numPixels);
     };
 
@@ -1762,6 +1785,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         staticPlp.inferenceRadianceQueryBuffer = inferenceRadianceQueryBuffer.getDevicePointer();
         staticPlp.inferenceTerminalInfoBuffer = inferenceTerminalInfoBuffer.getDevicePointer();
         staticPlp.inferredRadianceBuffer = inferredRadianceBuffer.getDevicePointer();
+        staticPlp.inferredRadianceBuffer2 = inferredRadianceBuffer2.getDevicePointer();
         staticPlp.perFrameContributionBuffer = perFrameContributionBuffer.getDevicePointer();
         for (int i = 0; i < 2; ++i) {
             staticPlp.trainRadianceQueryBuffer[i] = trainRadianceQueryBuffer[i].getDevicePointer();
@@ -1814,6 +1838,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         perFramePlp.prevCamera = perFramePlp.camera;
         perFramePlp.envLightPowerCoeff = 0;
         perFramePlp.envLightRotation = 0;
+        perFramePlp.useSeparateNRC = useSeparateNRC;
     }
 
     CUdeviceptr perFramePlpOnDevice;
@@ -2008,6 +2033,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             staticPlp.inferenceRadianceQueryBuffer = inferenceRadianceQueryBuffer.getDevicePointer();
             staticPlp.inferenceTerminalInfoBuffer = inferenceTerminalInfoBuffer.getDevicePointer();
             staticPlp.inferredRadianceBuffer = inferredRadianceBuffer.getDevicePointer();
+            if (useSeparateNRC)
+                staticPlp.inferredRadianceBuffer2 = inferredRadianceBuffer2.getDevicePointer();
             staticPlp.perFrameContributionBuffer = perFrameContributionBuffer.getDevicePointer();
             staticPlp.beautyAccumBuffer = beautyAccumBuffer.getSurfaceObject(0);
             staticPlp.albedoAccumBuffer = albedoAccumBuffer.getSurfaceObject(0);
@@ -2226,7 +2253,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         static bool infBounces = false;
         
         
-        static float log10RadianceScale = brightness;
+
         static bool visualizeTrainingPath = false;
         static bool train = true;
         bool stepTrain = false;
@@ -2333,7 +2360,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     if (ImGui::RadioButton("Baseline Path Tracing", !useNRC)) {
                         useNRC = false;
                         if (bufferTypeToDisplay == shared::BufferToDisplay::RenderingPathLength ||
-                            bufferTypeToDisplay == shared::BufferToDisplay::DirectlyVisualizedPrediction)
+                            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnly || 
+                            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyEmissive ||
+                            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyRaw ||
+                            bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCDiffuse ||
+                            bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCSpecular)
                             bufferTypeToDisplay = shared::BufferToDisplay::NoisyBeauty;
                     }
                     if (ImGui::RadioButton("Path Tracing + NRC", useNRC))
@@ -2417,7 +2448,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     ImGui::RadioButtonE("Motion Vector", &bufferTypeToDisplay, shared::BufferToDisplay::Flow);
                     if (useNRC) {
                         ImGui::RadioButtonE("Rendering Path Length", &bufferTypeToDisplay, shared::BufferToDisplay::RenderingPathLength);
-                        ImGui::RadioButtonE("Directly Visualized Prediction", &bufferTypeToDisplay, shared::BufferToDisplay::DirectlyVisualizedPrediction);
+                        ImGui::RadioButtonE("Directly Visualized Prediction", &bufferTypeToDisplay, shared::BufferToDisplay::NRCOnly);
+                        ImGui::RadioButtonE("NRC Only Emissive", &bufferTypeToDisplay, shared::BufferToDisplay::NRCOnlyEmissive);
+                        ImGui::RadioButtonE("NRC Only Raw", &bufferTypeToDisplay, shared::BufferToDisplay::NRCOnlyRaw);
+                        ImGui::RadioButtonE("Separate NRC Only Diffuse", &bufferTypeToDisplay, shared::BufferToDisplay::SeparateNRCDiffuse);
+                        ImGui::RadioButtonE("Separate NRC Only Specular", &bufferTypeToDisplay, shared::BufferToDisplay::SeparateNRCSpecular);
                     }
                     ImGui::RadioButtonE(
                         "Denoised Beauty", &bufferTypeToDisplay, shared::BufferToDisplay::DenoisedBeauty);
@@ -2516,7 +2551,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
             ImGui::Text("  prop radiance: %.3f [ms]", propagateRadiancesTime.getAverage());
             ImGui::Text("  shuffle train data: %.3f [ms]", shuffleTrainingDataTime.getAverage());
             ImGui::Text("  training: %.3f [ms]", trainTime.getAverage());
-            if (bufferTypeToDisplay == shared::BufferToDisplay::DirectlyVisualizedPrediction)
+            if (bufferTypeToDisplay == shared::BufferToDisplay::NRCOnly)
                 ImGui::Text("  visualize cache: %.3f [ms]", visualizeCacheTime.getAverage());
             if (bufferTypeToDisplay == shared::BufferToDisplay::DenoisedBeauty)
                 ImGui::Text("  denoise: %.3f [ms]", denoiseTime.getAverage());
@@ -2528,7 +2563,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
         applyToneMapAndGammaCorrection =
             bufferTypeToDisplay == shared::BufferToDisplay::NoisyBeauty ||
-            bufferTypeToDisplay == shared::BufferToDisplay::DirectlyVisualizedPrediction ||
+            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnly ||
+            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyEmissive ||
+            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyRaw ||
+            bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCDiffuse ||
+            bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCSpecular ||
             bufferTypeToDisplay == shared::BufferToDisplay::DenoisedBeauty;
 
 
@@ -2733,6 +2772,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
                     numInferenceQueries,
                     reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
+                neuralRadianceCache2.infer(
+                    cuStream,
+                    reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
+                    numInferenceQueries,
+                    reinterpret_cast<float*>(inferredRadianceBuffer2.getDevicePointer()));
                 curGPUTimer.infer.stop(cuStream);
 
                 // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。
@@ -2774,12 +2818,57 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         for (int step = 0; step < 4; ++step) {
                             //uint32_t batchSize = std::min(numTrainingData - dataStartIndex, targetBatchSize);
                             //batchSize = batchSize / 256 * 256;
-                            neuralRadianceCache.train(
-                                cuStream,
-                                reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
-                                reinterpret_cast<float*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
-                                batchSize,
-                                (showLossValue && step == 3) ? &lossValue : nullptr);
+
+                            if (useSeparateNRC) {
+                                neuralRadianceCache2.infer(
+                                    cuStream,
+                                    reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointer()),
+                                    numInferenceQueries,
+                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointer()));
+
+                                gpuEnv.kernelDecomposeTrainingData.launchWithThreadDim(
+                                    cuStream, cudau::dim3(shared::numTrainingDataPerFrame),
+                                    reinterpret_cast<float3*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float3*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    true
+                                    );
+
+                                neuralRadianceCache.train(
+                                    cuStream,
+                                    reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    batchSize,
+                                    (showLossValue && step == 3) ? &lossValue : nullptr);
+    
+
+                                neuralRadianceCache.infer(
+                                    cuStream,
+                                    reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointer()),
+                                    numInferenceQueries,
+                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointer()));
+
+                                gpuEnv.kernelDecomposeTrainingData.launchWithThreadDim(
+                                    cuStream, cudau::dim3(shared::numTrainingDataPerFrame),
+                                    reinterpret_cast<float3*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float3*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    false
+                                    );
+
+                                neuralRadianceCache2.train(
+                                    cuStream,
+                                    reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    batchSize,
+                                    (showLossValue && step == 3) ? &lossValue : nullptr);
+                            } else {
+                                neuralRadianceCache.train(
+                                    cuStream,
+                                    reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                    batchSize,
+                                    (showLossValue && step == 3) ? &lossValue : nullptr);
+                            }
+
                             dataStartIndex += batchSize;
                         }
                     }
@@ -2789,7 +2878,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
             // JP: ニューラルネットワークの推定値を直接可視化する。
             // EN: Directly visualize the predictions of the neural network.
-            if (bufferTypeToDisplay == shared::BufferToDisplay::DirectlyVisualizedPrediction) {
+            if (bufferTypeToDisplay == shared::BufferToDisplay::NRCOnly ||
+                bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyEmissive ||
+                bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyRaw ||
+                bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCDiffuse ||
+                bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCSpecular
+            ) {
                 curGPUTimer.visualizeCache.start(cuStream);
 
                 gpuEnv.pathTracing.setEntryPoint(PathTracingEntryPoint::visualizePrediction);
@@ -2801,6 +2895,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
                     renderTargetSizeX * renderTargetSizeY,
                     reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
+                if (useSeparateNRC)
+                    neuralRadianceCache2.infer(
+                        cuStream,
+                        reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
+                        renderTargetSizeX * renderTargetSizeY,
+                        reinterpret_cast<float*>(inferredRadianceBuffer2.getDevicePointer()));
 
                 curGPUTimer.visualizeCache.stop(cuStream);
             }
@@ -2897,7 +2997,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
             bufferToDisplay = linearFlowBuffer.getDevicePointer();
             break;
         case shared::BufferToDisplay::RenderingPathLength:
-        case shared::BufferToDisplay::DirectlyVisualizedPrediction:
+        case shared::BufferToDisplay::NRCOnly:
+        case shared::BufferToDisplay::NRCOnlyEmissive:
+        case shared::BufferToDisplay::NRCOnlyRaw:
+        case shared::BufferToDisplay::SeparateNRCDiffuse:
+        case shared::BufferToDisplay::SeparateNRCSpecular:
             break;
         case shared::BufferToDisplay::DenoisedBeauty:
             bufferToDisplay = linearDenoisedBeautyBuffer.getDevicePointer();
@@ -2909,11 +3013,10 @@ int32_t main(int32_t argc, const char* argv[]) try {
         kernelVisualizeToOutputBuffer.launchWithThreadDim(
             cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
             visualizeTrainingPath,
-            bufferToDisplay, bufferTypeToDisplay,
+            bufferToDisplay, bufferTypeToDisplay, 
+            // NRCOnlyType,
             0.5f, std::pow(10.0f, motionVectorScale),
-            outputBufferSurfaceHolder.getNext(),
-            nrcOnlyRaw,
-            nrcOnlyEmissive);
+            outputBufferSurfaceHolder.getNext());
 
         outputBufferSurfaceHolder.endCUDAAccess(cuStream, true);
 
@@ -3041,6 +3144,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         trainTargetBuffer[i].finalize();
         trainRadianceQueryBuffer[i].finalize();
     }
+    separateNrcBuffer.finalize();
     CUDADRV_CHECK(cuMemFree(offsetToSelectTrainingPathOnDevice));
     CUDADRV_CHECK(cuMemFree(offsetToSelectUnbiasedTileOnDevice));
     for (int i = 1; i >= 0; --i) {

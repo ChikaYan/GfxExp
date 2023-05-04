@@ -82,10 +82,9 @@ CUDA_DEVICE_KERNEL void avgLinearBuffers(
 CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     bool visualizeTrainingPath,
     void* linearBuffer, BufferToDisplay bufferTypeToDisplay,
+    // NRCOnlyDisplayType NRCOnlyType,
     float motionVectorOffset, float motionVectorScale,
-    optixu::NativeBlockBuffer2D<float4> outputBuffer,
-    bool rawNetworkOutput,
-    bool nrcOnlyEmissive) {
+    optixu::NativeBlockBuffer2D<float4> outputBuffer) {
     uint2 launchIndex = make_uint2(blockDim.x * blockIdx.x + threadIdx.x,
                                    blockDim.y * blockIdx.y + threadIdx.y);
     if (launchIndex.x >= plp.s->imageSize.x ||
@@ -96,9 +95,18 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
     float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
     switch (bufferTypeToDisplay) {
     case BufferToDisplay::NoisyBeauty:
-    case BufferToDisplay::DirectlyVisualizedPrediction:
+    case BufferToDisplay::NRCOnly:
+    case BufferToDisplay::NRCOnlyRaw:
+    case BufferToDisplay::NRCOnlyEmissive:
+    case BufferToDisplay::SeparateNRCDiffuse:
+    case BufferToDisplay::SeparateNRCSpecular:
     case BufferToDisplay::DenoisedBeauty: {
-        if (bufferTypeToDisplay == BufferToDisplay::DirectlyVisualizedPrediction) {
+        if (bufferTypeToDisplay == shared::BufferToDisplay::NRCOnly ||
+            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyEmissive ||
+            bufferTypeToDisplay == shared::BufferToDisplay::NRCOnlyRaw ||
+            bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCDiffuse ||
+            bufferTypeToDisplay == shared::BufferToDisplay::SeparateNRCSpecular
+            ) {
             const TerminalInfo &terminalInfo = plp.s->inferenceTerminalInfoBuffer[linearIndex];
 
             float3 radiance = make_float3(0.0f, 0.0f, 0.0f);
@@ -108,13 +116,31 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
                     radiance /= plp.f->radianceScale;
 
                 if constexpr (useReflectanceFactorization) {
-                    if (!rawNetworkOutput){
+                    if (bufferTypeToDisplay != BufferToDisplay::NRCOnlyRaw){
                         const RadianceQuery &terminalQuery = plp.s->inferenceRadianceQueryBuffer[linearIndex];
-                        radiance *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
+                        if (!plp.f->useSeparateNRC){
+                            radiance *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
+                        }
+                        else {
+                            if (bufferTypeToDisplay == BufferToDisplay::SeparateNRCDiffuse) {
+                                radiance = radiance * terminalQuery.diffuseReflectance;
+                            } else if (bufferTypeToDisplay == BufferToDisplay::SeparateNRCSpecular) {
+                                float3 radiance2 = max(plp.s->inferredRadianceBuffer2[linearIndex], make_float3(0.0f, 0.0f, 0.0f));
+                                if (plp.f->radianceScale > 0) 
+                                    radiance2 /= plp.f->radianceScale;
+                                radiance = radiance2 * terminalQuery.specularReflectance;
+                            } else {
+                                // render both specular and diffuse
+                                float3 radiance2 = max(plp.s->inferredRadianceBuffer2[linearIndex], make_float3(0.0f, 0.0f, 0.0f));
+                                if (plp.f->radianceScale > 0) 
+                                    radiance2 /= plp.f->radianceScale;
+                                radiance = (radiance * terminalQuery.diffuseReflectance + radiance2 * terminalQuery.specularReflectance);
+                            }
+                        }
                     }
                 }
             }
-            if (nrcOnlyEmissive){
+            if (bufferTypeToDisplay == BufferToDisplay::NRCOnlyEmissive){
                 value = make_float4(terminalInfo.alpha * radiance + plp.s->perFrameContributionBuffer[linearIndex], 1.0f); // terminalInfo.alpha is always 1.f
             } else {
                 value = make_float4(terminalInfo.alpha * radiance, 1.0f); // terminalInfo.alpha is always 1.f

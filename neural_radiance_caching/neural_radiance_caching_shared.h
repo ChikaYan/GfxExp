@@ -350,6 +350,7 @@ namespace shared {
         RadianceQuery* inferenceRadianceQueryBuffer; // image size + #(training suffix)
         TerminalInfo* inferenceTerminalInfoBuffer; // image size
         float3* inferredRadianceBuffer; // image size + #(training suffix)
+        float3* inferredRadianceBuffer2; // image size + #(training suffix)
         float3* perFrameContributionBuffer; // image size
         RadianceQuery* trainRadianceQueryBuffer[2]; // #(training vertex)
         float3* trainTargetBuffer[2]; // #(training vertex)
@@ -383,6 +384,8 @@ namespace shared {
         PerspectiveCamera prevCamera;
 
         float radianceScale;
+
+        bool useSeparateNRC;
 
         float envLightPowerCoeff;
         float envLightRotation;
@@ -436,7 +439,11 @@ namespace shared {
         Normal,
         Flow,
         RenderingPathLength,
-        DirectlyVisualizedPrediction,
+        NRCOnly,
+        NRCOnlyEmissive,
+        NRCOnlyRaw,
+        SeparateNRCDiffuse,
+        SeparateNRCSpecular,
         DenoisedBeauty,
     };
 
