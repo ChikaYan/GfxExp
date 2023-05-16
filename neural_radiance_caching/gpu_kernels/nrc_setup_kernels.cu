@@ -3,6 +3,8 @@
 
 using namespace shared;
 
+#include <assert.h>
+
 CUDA_DEVICE_KERNEL void preprocessNRC(
     uint32_t offsetToSelectUnbiasedTile,
     uint32_t offsetToSelectTrainingPath,
@@ -252,22 +254,41 @@ CUDA_DEVICE_KERNEL void decomposeTrainingData(
 
     RadianceQuery query = plp.s->trainRadianceQueryBuffer[1][linearIndex];
 
-    // if (linearIndex == 0){
-    //     printf("partialPredData: [%f, %f, %f]\n", partialPredData[linearIndex].x, partialPredData[linearIndex].y ,partialPredData[linearIndex].z);
-    // }
+    if (linearIndex == 0){
+        printf("============\n");
+        printf("partialPredData: [%f, %f, %f]\n", partialPredData[linearIndex].x, partialPredData[linearIndex].y ,partialPredData[linearIndex].z);
+        printf("targetData: [%f, %f, %f]\n", targetData[linearIndex].x, targetData[linearIndex].y ,targetData[linearIndex].z);
+    }
     // if (linearIndex == 0){
     //     printf("targetData: [%f, %f, %f]\n", targetData[linearIndex].x, targetData[linearIndex].y ,targetData[linearIndex].z);
     // }
+
+    // assert(!isnan_f3(targetData[linearIndex]));
+    // assert(!isnan_f3(partialPredData[linearIndex]));
+
+
     if (target_diffuse){
         partialPredData[linearIndex] = safeDivide(targetData[linearIndex] - partialPredData[linearIndex] * query.specularReflectance, query.diffuseReflectance);
     } else {
         partialPredData[linearIndex] = safeDivide(targetData[linearIndex] - partialPredData[linearIndex] * query.diffuseReflectance, query.specularReflectance);
     }
 
+    // assert(!isnan_f3(targetData[linearIndex]));
+
+    partialPredData[linearIndex] = max(partialPredData[linearIndex], make_float3(1e-5f, 1e-5f, 1e-5f));
+    partialPredData[linearIndex] = min(partialPredData[linearIndex], make_float3(1e3f, 1e3f, 1e3f));
 
 
     if (linearIndex == 0){
-        printf("train target: [%f, %f, %f]\n", partialPredData[linearIndex].x, partialPredData[linearIndex].y ,partialPredData[linearIndex].z);
+        if (target_diffuse){
+            printf("diffuse target: [%f, %f, %f]\n", partialPredData[linearIndex].x, partialPredData[linearIndex].y ,partialPredData[linearIndex].z);
+            printf("diffuse texture: [%f, %f, %f]\n", query.diffuseReflectance.x, query.diffuseReflectance.y ,query.diffuseReflectance.z);
+            printf("specular texture: [%f, %f, %f]\n", query.specularReflectance.x, query.specularReflectance.y ,query.specularReflectance.z);
+        } else {
+            printf("specular target: [%f, %f, %f]\n", partialPredData[linearIndex].x, partialPredData[linearIndex].y ,partialPredData[linearIndex].z);
+            printf("diffuse texture: [%f, %f, %f]\n", query.diffuseReflectance.x, query.diffuseReflectance.y ,query.diffuseReflectance.z);
+            printf("specular texture: [%f, %f, %f]\n", query.specularReflectance.x, query.specularReflectance.y ,query.specularReflectance.z);
+        }
     }
 
 }

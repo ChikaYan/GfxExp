@@ -68,7 +68,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
         launchIndex.y == plp.f->mousePosition.y)
         *plp.f->pickInfo = pickInfo;
 
-    // JP: ƒfƒmƒCƒU[‚É•K—v‚Èî•ñ‚ðo—ÍB
+    // JP: ï¿½fï¿½mï¿½Cï¿½Uï¿½[ï¿½É•Kï¿½vï¿½Èï¿½ï¿½ï¿½ï¿½oï¿½ÍB
     // EN: Output information required for the denoiser.
     float3 firstHitNormal = transpose(camera.orientation) * hitPointParams.normalInWorld;
     firstHitNormal.x *= -1;
@@ -140,6 +140,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     float3 vOut = -optixGetWorldRayDirection();
     float3 vOutLocal = shadingFrame.toLocal(normalize(vOut));
 
+    float roughness;
+    float3 diffuseReflectance, specularReflectance;
+    bsdf.getSurfaceParameters(&diffuseReflectance, &specularReflectance, &roughness);
+    hitPointParams->diffuseTexture = diffuseReflectance;
+    hitPointParams->specularTexture = specularReflectance;
+    hitPointParams->roughness = roughness;
+
     hitPointParams->albedo = bsdf.evaluateDHReflectanceEstimate(vOutLocal);
     hitPointParams->positionInWorld = positionInWorld;
     hitPointParams->prevPositionInWorld = prevPositionInWorld;
@@ -147,7 +154,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     hitPointParams->texCoord = texCoord;
     hitPointParams->materialSlot = geomInst.materialSlot;
 
-    // JP: ƒ}ƒEƒX‚ªæ‚Á‚Ä‚¢‚éƒsƒNƒZƒ‹‚Ìî•ñ‚ðo—Í‚·‚éB
+    // JP: ï¿½}ï¿½Eï¿½Xï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½ï¿½sï¿½Nï¿½Zï¿½ï¿½ï¿½Ìï¿½ï¿½ï¿½ï¿½oï¿½Í‚ï¿½ï¿½ï¿½B
     // EN: Export the information of the pixel on which the mouse is.
     if (launchIndex.x == plp.f->mousePosition.x &&
         launchIndex.y == plp.f->mousePosition.y) {
@@ -159,6 +166,9 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
         pickInfo->positionInWorld = positionInWorld;
         pickInfo->normalInWorld = shadingFrame.normal;
         pickInfo->albedo = hitPointParams->albedo;
+        pickInfo->diffuseTexture = hitPointParams->diffuseTexture;
+        pickInfo->specularTexture = hitPointParams->specularTexture;
+        pickInfo->roughness = hitPointParams->roughness;
         float3 emittance = make_float3(0.0f, 0.0f, 0.0f);
         if (mat.emittance) {
             float4 texValue = tex2DLod<float4>(mat.emittance, texCoord.x, texCoord.y, 0.0f);
@@ -188,13 +198,16 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(setupGBuffers)() {
     PrimaryRayPayloadSignature::get(&hitPointParams, &pickInfo);
 
     hitPointParams->albedo = make_float3(0.0f, 0.0f, 0.0f);
+    hitPointParams->diffuseTexture = make_float3(0.0f, 0.0f, 0.0f);
+    hitPointParams->specularTexture = make_float3(0.0f, 0.0f, 0.0f);
+    hitPointParams->roughness = 0.f;
     hitPointParams->positionInWorld = p;
     hitPointParams->prevPositionInWorld = p;
     hitPointParams->normalInWorld = vOut;
     hitPointParams->texCoord = make_float2(u, v);
     hitPointParams->materialSlot = 0xFFFFFFFF;
 
-    // JP: ƒ}ƒEƒX‚ªæ‚Á‚Ä‚¢‚éƒsƒNƒZƒ‹‚Ìî•ñ‚ðo—Í‚·‚éB
+    // JP: ï¿½}ï¿½Eï¿½Xï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½ï¿½sï¿½Nï¿½Zï¿½ï¿½ï¿½Ìï¿½ï¿½ï¿½ï¿½oï¿½Í‚ï¿½ï¿½ï¿½B
     // EN: Export the information of the pixel on which the mouse is.
     if (launchIndex.x == plp.f->mousePosition.x &&
         launchIndex.y == plp.f->mousePosition.y) {

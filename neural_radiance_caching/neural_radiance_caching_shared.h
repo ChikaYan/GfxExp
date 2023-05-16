@@ -2,6 +2,9 @@
 
 #include "../common/common_shared.h"
 
+
+#define isnan_f3(f) (isnan(f.x) || isnan(f.y) || isnan(f.z))
+
 namespace shared {
     static constexpr float probToSampleEnvLight = 0.25f;
     static constexpr float pathTerminationFactor = 0.01f; // c in the paper.
@@ -95,8 +98,11 @@ namespace shared {
         float3 positionInWorld;
         float3 prevPositionInWorld;
         float3 normalInWorld;
+        float3 diffuseTexture;
+        float3 specularTexture;
         float2 texCoord;
         uint32_t materialSlot;
+        float roughness;
     };
 
 
@@ -119,6 +125,9 @@ namespace shared {
         float3 normalInWorld;
         float3 albedo;
         float3 emittance;
+        float3 diffuseTexture;
+        float3 specularTexture;
+        float roughness;
         unsigned int hit : 1;
     };
 

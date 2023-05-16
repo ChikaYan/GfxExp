@@ -1348,7 +1348,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
     cudau::TypedBuffer<shared::RadianceQuery> trainRadianceQueryBuffer[2];
     cudau::TypedBuffer<float3> trainTargetBuffer[2];
-    cudau::TypedBuffer<float3> separateNrcBuffer;
+    cudau::TypedBuffer<float3> separateNrcBuffer[2];
     cudau::TypedBuffer<shared::TrainingVertexInfo> trainVertexInfoBuffer;
     cudau::TypedBuffer<shared::TrainingSuffixTerminalInfo> trainSuffixTerminalInfoBuffer;
     cudau::TypedBuffer<shared::LinearCongruentialGenerator> dataShufflerBuffer;
@@ -1357,9 +1357,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
         trainTargetBuffer[i].initialize(
             gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
+        separateNrcBuffer[i].initialize(
+            gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
     }
-    separateNrcBuffer.initialize(
-        gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
     trainVertexInfoBuffer.initialize(
         gpuEnv.cuContext, Scene::bufferType, shared::trainBufferSize);
     trainSuffixTerminalInfoBuffer.initialize(
@@ -1378,13 +1378,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
     }
 
     NeuralRadianceCache neuralRadianceCache;
-    NeuralRadianceCache neuralRadianceCache2;
+    NeuralRadianceCache neuralRadianceCacheSpecular;
     NRCConfig.posEnc = g_positionEncoding;
     NRCConfig.numHiddenLayers = g_numHiddenLayers;
     NRCConfig.learningRate = g_learningRate;
 
     neuralRadianceCache.initialize(NRCConfig);
-    neuralRadianceCache2.initialize(NRCConfig);
+    neuralRadianceCacheSpecular.initialize(NRCConfig);
 
     // END: Initialize NRC training-related buffers.
     // ----------------------------------------------------------------
@@ -1878,6 +1878,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     initPickInfo.primIndex = 0xFFFFFFFF;
     initPickInfo.positionInWorld = make_float3(0.0f);
     initPickInfo.albedo = make_float3(0.0f);
+    initPickInfo.diffuseTexture = make_float3(0.0f);
+    initPickInfo.specularTexture = make_float3(0.0f);
+    initPickInfo.roughness = 0.f;
     initPickInfo.emittance = make_float3(0.0f);
     initPickInfo.normalInWorld = make_float3(0.0f);
     cudau::TypedBuffer<shared::PickInfo> pickInfos[2];
@@ -2259,6 +2262,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         bool stepTrain = false;
         static bool showLossValue = true;
         static float lossValue = 0.0f;
+        static float lossValueSpecular = 0.0f;
         static bool prevTrainDone = false;
         static bool debugSwitches[] = {
             false, false, false, false, false, false, false, false
@@ -2300,6 +2304,16 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         pickInfoOnHost.albedo.x,
                         pickInfoOnHost.albedo.y,
                         pickInfoOnHost.albedo.z);
+            ImGui::Text("Diffuse: %.3f, %.3f, %.3f",
+                        pickInfoOnHost.diffuseTexture.x,
+                        pickInfoOnHost.diffuseTexture.y,
+                        pickInfoOnHost.diffuseTexture.z);
+            ImGui::Text("Specular: %.3f, %.3f, %.3f",
+                        pickInfoOnHost.specularTexture.x,
+                        pickInfoOnHost.specularTexture.y,
+                        pickInfoOnHost.specularTexture.z);
+            ImGui::Text("Roughness: %.3f",
+                        pickInfoOnHost.roughness);
             ImGui::Text("Emittance: %.3f, %.3f, %.3f",
                         pickInfoOnHost.emittance.x,
                         pickInfoOnHost.emittance.y,
@@ -2772,7 +2786,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
                     numInferenceQueries,
                     reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
-                neuralRadianceCache2.infer(
+                neuralRadianceCacheSpecular.infer(
                     cuStream,
                     reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
                     numInferenceQueries,
@@ -2820,46 +2834,50 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             //batchSize = batchSize / 256 * 256;
 
                             if (useSeparateNRC) {
-                                neuralRadianceCache2.infer(
+                                neuralRadianceCacheSpecular.infer(
                                     cuStream,
                                     reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointer()),
                                     numInferenceQueries,
-                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointer()));
+                                    reinterpret_cast<float*>(separateNrcBuffer[0].getDevicePointer()));
+
+                                neuralRadianceCache.infer(
+                                    cuStream,
+                                    reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointer()),
+                                    numInferenceQueries,
+                                    reinterpret_cast<float*>(separateNrcBuffer[1].getDevicePointer()));
+
 
                                 gpuEnv.kernelDecomposeTrainingData.launchWithThreadDim(
                                     cuStream, cudau::dim3(shared::numTrainingDataPerFrame),
                                     reinterpret_cast<float3*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
-                                    reinterpret_cast<float3*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float3*>(separateNrcBuffer[0].getDevicePointerAt(dataStartIndex)),
                                     true
                                     );
 
                                 neuralRadianceCache.train(
                                     cuStream,
                                     reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
-                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float*>(separateNrcBuffer[0].getDevicePointerAt(dataStartIndex)),
                                     batchSize,
                                     (showLossValue && step == 3) ? &lossValue : nullptr);
     
 
-                                neuralRadianceCache.infer(
-                                    cuStream,
-                                    reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointer()),
-                                    numInferenceQueries,
-                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointer()));
 
                                 gpuEnv.kernelDecomposeTrainingData.launchWithThreadDim(
                                     cuStream, cudau::dim3(shared::numTrainingDataPerFrame),
                                     reinterpret_cast<float3*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
-                                    reinterpret_cast<float3*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float3*>(separateNrcBuffer[1].getDevicePointerAt(dataStartIndex)),
                                     false
                                     );
 
-                                neuralRadianceCache2.train(
+                                neuralRadianceCacheSpecular.train(
                                     cuStream,
                                     reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
-                                    reinterpret_cast<float*>(separateNrcBuffer.getDevicePointerAt(dataStartIndex)),
+                                    reinterpret_cast<float*>(separateNrcBuffer[1].getDevicePointerAt(dataStartIndex)),
                                     batchSize,
-                                    (showLossValue && step == 3) ? &lossValue : nullptr);
+                                    (showLossValue && step == 3) ? &lossValueSpecular : nullptr);
+
+                                    lossValue += lossValueSpecular;
                             } else {
                                 neuralRadianceCache.train(
                                     cuStream,
@@ -2896,7 +2914,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     renderTargetSizeX * renderTargetSizeY,
                     reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
                 if (useSeparateNRC)
-                    neuralRadianceCache2.infer(
+                    neuralRadianceCacheSpecular.infer(
                         cuStream,
                         reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
                         renderTargetSizeX * renderTargetSizeY,
@@ -3143,8 +3161,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
     for (int i = 1; i >= 0; --i) {
         trainTargetBuffer[i].finalize();
         trainRadianceQueryBuffer[i].finalize();
+        separateNrcBuffer[i].finalize();
     }
-    separateNrcBuffer.finalize();
     CUDADRV_CHECK(cuMemFree(offsetToSelectTrainingPathOnDevice));
     CUDADRV_CHECK(cuMemFree(offsetToSelectUnbiasedTileOnDevice));
     for (int i = 1; i >= 0; --i) {

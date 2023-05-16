@@ -70,6 +70,8 @@ def log_parse(
         img = imageio.imread(img_list[i])[..., :3]
         summary_writer.add_image('raw_frame', img, global_step=img_idx, dataformats='HWC')
 
+        if gt_dir is None:
+            gt_dir = ''
         gt_raw_dir = gt_dir + '/imgs'
         gt_denoise_dir = gt_dir + '/denoised_imgs'
 
@@ -119,9 +121,26 @@ def log_parse(
                 stats_dn['raw/flip_mean'] = float(lines[0].split(':')[-1].strip())
                 stats_dn['raw/flip_med'] = float(lines[1].split(':')[-1].strip())
 
+
+            # compare NRC raw with PT denoised
+            raw_mse = ((raw_img - dn_gt)**2).mean()
+            stats_dn['rd/mse'] = raw_mse
+            stats_dn['rd/psnr'] = -10.0 * np.log10(raw_mse)
+            stats_dn['rd/ssim'] = ssim_fn((raw_img*255).astype(np.uint8), (dn_gt*255).astype(np.uint8), channel_axis=2, data_range=255)
+
+            cmd(f'python C:/nonsys/workspace/GfxExp/flip/python/flip.py \
+                --test {exp_dir}/imgs/{img_idx:05d}.png \
+                --reference {gt_denoise_dir}/{img_idx:05d}.png \
+                -d {exp_dir}/flip_rd -txt \
+                -b {img_idx:05d} -v 0', verbose=False)
+            flip_txt_path = Path(f'{exp_dir}/flip_rd') / f'{img_idx:05d}.txt'
+            with flip_txt_path.open('r') as f:
+                lines = f.readlines()
+                stats_dn['rd/flip_mean'] = float(lines[0].split(':')[-1].strip())
+                stats_dn['rd/flip_med'] = float(lines[1].split(':')[-1].strip())
+
             for k in stats_dn:
                 summary_writer.add_scalar(f'{k}', stats_dn[k], global_step=img_idx)
-
 
     if output_vid:
         fps = len(denoised_img_list) // 10 

@@ -49,6 +49,7 @@ void NeuralRadianceCache::initialize(NeuralRadianceCacheConfig NRCConfig) {
     json config = {
         {"loss", {
             {"otype", "RelativeL2Luminance"}
+            // {"otype", "L2"}
         }},
         {"optimizer", {
             {"otype", "EMA"},
