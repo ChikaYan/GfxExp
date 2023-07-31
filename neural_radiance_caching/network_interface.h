@@ -14,6 +14,7 @@ struct NeuralRadianceCacheConfig {
     float learningRate = 1e-2f;
     uint32_t hashNLevels = 16;
     uint32_t triNFrequency = 12;
+    uint32_t motionFrequency = 0;
 };
 
 // JP: サンプルプログラム全体をnvcc経由でコンパイルしないといけない状況を避けるため、

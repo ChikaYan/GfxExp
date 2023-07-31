@@ -191,6 +191,7 @@ CUDA_DEVICE_KERNEL void shuffleTrainingData() {
                    query.diffuseReflectance.x, query.diffuseReflectance.y, query.diffuseReflectance.z,
                    query.specularReflectance.x, query.specularReflectance.y, query.specularReflectance.z);
             query.position = make_float3(0.0f);
+            query.motion = make_float3(0.0f);
             query.normal_phi = 0.0f;
             query.normal_theta = 0.0f;
             query.vOut_phi = 0.0f;

@@ -22,6 +22,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void createRadianceQuery(
     RadianceQuery* query) {
     float phi, theta;
     query->position = plp.s->sceneAABB->normalize(positionInWorld);
+    query->motion = make_float3(0.0f);
     convertToPolar(normalInWorld, &phi, &theta);
     query->normal_phi = phi;
     query->normal_theta = theta;
@@ -794,6 +795,11 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_raygen_generic() {
                             positionInWorld, shadingFrame.normal, vOut,
                             roughness, diffuseReflectance, specularReflectance,
                             &radQuery);
+                        // this ray has motion vector info avaliable, assign it to the ray
+                        radQuery.motion = make_float3(0.0f);
+                        radQuery.motion.x = gBuffer2.motionVector.x;
+                        radQuery.motion.y = gBuffer2.motionVector.y;
+
                         plp.s->trainRadianceQueryBuffer[0][trainDataIndex] = radQuery;
 
                         TrainingVertexInfo vertInfo;

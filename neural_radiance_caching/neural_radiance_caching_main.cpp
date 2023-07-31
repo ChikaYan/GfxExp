@@ -912,6 +912,14 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             NRCConfig.triNFrequency = std::stol(argv[i + 1]);
             i += 1;
         }
+        else if (0 == strncmp(arg, "-motion_n_frequency", 20)) {
+            if (i + 1 >= argc) {
+                printf("Invalid option.\n");
+                exit(EXIT_FAILURE);
+            }
+            NRCConfig.motionFrequency = std::stol(argv[i + 1]);
+            i += 1;
+        }
         else if (0 == strncmp(arg, "-net_width", 11)) {
             if (i + 1 >= argc) {
                 printf("Invalid option.\n");
@@ -2781,16 +2789,55 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 // EN: Predict radiance values at the terminals of rendering paths and training suffixes.
                 curGPUTimer.infer.start(cuStream);
                 // TODO support pytorch
+
+
+
+                // shared::RadianceQuery LogQuery[3];
+                // inferenceRadianceQueryBuffer.read(LogQuery, 3, cuStream);
+
+                // for (int pi = 0; pi < 3; pi++){
+
+                //     std::cout << "position: " << LogQuery[pi].position.x << ", " \
+                //     << LogQuery[pi].position.y << ", " \
+                //     << LogQuery[pi].position.z << "\n";
+                //     std::cout << "motion: " << LogQuery[pi].motion.x << ", " \
+                //     << LogQuery[pi].motion.y << "\n";
+                //     std::cout << "normal_phi: " << LogQuery[pi].normal_phi << "\n";
+                //     std::cout << "normal_theta: " << LogQuery[pi].normal_theta << "\n";
+                //     std::cout << "vOut_phi: " << LogQuery[pi].vOut_phi << "\n";
+                //     std::cout << "vOut_theta: " << LogQuery[pi].vOut_theta << "\n";
+                //     std::cout << "roughness: " << LogQuery[pi].roughness << "\n";
+                //     std::cout << "diffuseReflectance: " << LogQuery[pi].diffuseReflectance.x << ", " \
+                //     << LogQuery[pi].diffuseReflectance.y << ", " \
+                //     << LogQuery[pi].diffuseReflectance.z << "\n";
+                //     std::cout << "specularReflectance: " << LogQuery[pi].specularReflectance.x << ", " \
+                //     << LogQuery[pi].specularReflectance.y << ", " \
+                //     << LogQuery[pi].specularReflectance.z << "\n";
+                //     std::cout << "#######\n"; 
+
+                // }
+
+                // float* queryfloat = reinterpret_cast<float*>(LogQuery);
+                // for (int pi = 0; pi < 17 * 3; pi++){
+                //     std::cout << queryfloat[pi] << ", ";
+                // }
+
+                // std::cout << "\n"; 
+                // std::cout << "<<<<<<<<<<<<<<<<<<<<\n"; 
+
+
+
                 neuralRadianceCache.infer(
                     cuStream,
                     reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
                     numInferenceQueries,
                     reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
-                neuralRadianceCacheSpecular.infer(
-                    cuStream,
-                    reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
-                    numInferenceQueries,
-                    reinterpret_cast<float*>(inferredRadianceBuffer2.getDevicePointer()));
+                if (useSeparateNRC)
+                    neuralRadianceCacheSpecular.infer(
+                        cuStream,
+                        reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
+                        numInferenceQueries,
+                        reinterpret_cast<float*>(inferredRadianceBuffer2.getDevicePointer()));
                 curGPUTimer.infer.stop(cuStream);
 
                 // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。

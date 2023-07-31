@@ -18,7 +18,8 @@ using precision_t = network_precision_t;
 // Roughness: 1
 // Diffuse Reflectance: 3
 // Specular Reflectance: 3
-constexpr static uint32_t numInputDims = 14;
+// constexpr static uint32_t numInputDims = 14;
+constexpr static uint32_t numInputDims = 17;
 // RGB Radiance: 3
 constexpr static uint32_t numOutputDims = 3;
 
@@ -77,9 +78,19 @@ void NeuralRadianceCache::initialize(NeuralRadianceCacheConfig NRCConfig) {
             {"otype", "Composite"},
             {"nested", {
                 {
-                    {"n_dims_to_encode", 3},
+                    {"n_dims_to_encode", 3}, // position
                     {"otype", "TriangleWave"},
                     {"n_frequencies", NRCConfig.triNFrequency},
+                },
+                {
+                    {"n_dims_to_encode", 2}, // motion
+                    {"otype", "TriangleWave"},
+                    {"n_frequencies", NRCConfig.motionFrequency},
+                },
+                {
+                    {"n_dims_to_encode", 1}, // motion extra digit
+                    {"otype", "TriangleWave"},
+                    {"n_frequencies", 0},
                 },
                 {
                     {"n_dims_to_encode", 5},
@@ -106,6 +117,11 @@ void NeuralRadianceCache::initialize(NeuralRadianceCacheConfig NRCConfig) {
                     {"base_resolution", 16},
                     {"n_levels", NRCConfig.hashNLevels},
                     {"n_features_per_level", 2},
+                },
+                {
+                    {"n_dims_to_encode", 3}, // motion
+                    {"otype", "TriangleWave"},
+                    {"n_frequencies", NRCConfig.motionFrequency},
                 },
                 {
                     {"n_dims_to_encode", 5},
@@ -150,6 +166,8 @@ void NeuralRadianceCache::infer(
 void NeuralRadianceCache::train(
     CUstream stream, float* inputData, float* targetData, uint32_t numData, float* lossOnCPU) {
     Assert((numData & 0x7F) == 0, "numData must be a multiple of 128.");
+    // printf("%f, ", inputData[0]);
+    // printf("%u, ", numData);
     GPUMatrix<float> inputs(inputData, numInputDims, numData);
     GPUMatrix<float> targets(targetData, numOutputDims, numData);
     auto context = m->trainer->training_step(stream, inputs, targets);

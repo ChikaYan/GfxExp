@@ -332,6 +332,7 @@
     <ClInclude Include="..\ext\prebuilt\include\KHR\khrplatform.h">
       <Filter>non-essentials\ext\gl3w</Filter>
     </ClInclude>
+    <ClInclude Include="restir_shared.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="network_interface.cu" />

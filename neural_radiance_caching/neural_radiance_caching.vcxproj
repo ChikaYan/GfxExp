@@ -202,6 +202,7 @@
       <PreprocessorDefinitions>USE_CUBD_LIB;_CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>C:\nonsys\workspace\GfxExp\ext;C:\nonsys\workspace\GfxExp\build\ext\gl3w\include;C:\nonsys\workspace\GfxExp\ext\assimp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

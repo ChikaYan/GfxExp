@@ -152,6 +152,7 @@ namespace shared {
 
     struct RadianceQuery {
         float3 position;
+        float3 motion;
         float normal_phi;
         float normal_theta;
         float vOut_phi;
