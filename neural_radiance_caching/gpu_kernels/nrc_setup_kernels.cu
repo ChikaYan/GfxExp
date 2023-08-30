@@ -293,3 +293,22 @@ CUDA_DEVICE_KERNEL void decomposeTrainingData(
     }
 
 }
+
+CUDA_DEVICE_KERNEL void warpDyCoords(
+    RadianceQuery* radianceQueryBuffer,
+    Matrix4x4* warpMat
+) {
+    uint32_t linearIndex = blockDim.x * blockIdx.x + threadIdx.x;
+    uint32_t bufIdx = plp.f->bufferIndex;
+    uint32_t numTrainingData = *plp.s->numTrainingData[bufIdx];
+
+    if (linearIndex > numTrainingData) return;
+
+    // RadianceQuery query = plp.s->trainRadianceQueryBuffer[1][linearIndex];
+    RadianceQuery query = radianceQueryBuffer[linearIndex];
+
+    if ((query.motion.x != 0.f) || (query.motion.y != 0.f)){
+        query.position = (*warpMat) * query.position;
+    }
+
+}

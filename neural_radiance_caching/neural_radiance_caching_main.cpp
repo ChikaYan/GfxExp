@@ -123,6 +123,7 @@ struct GPUEnvironment {
     cudau::Kernel kernelPropagateRadianceValues;
     cudau::Kernel kernelDecomposeTrainingData;
     cudau::Kernel kernelShuffleTrainingData;
+    cudau::Kernel kernelWarpDyCoords;
     CUdeviceptr plpPtr;
 
     template <typename EntryPointType>
@@ -168,6 +169,8 @@ struct GPUEnvironment {
             cudau::Kernel(cudaModule, "decomposeTrainingData", cudau::dim3(32), 0);
         kernelShuffleTrainingData =
             cudau::Kernel(cudaModule, "shuffleTrainingData", cudau::dim3(32), 0);
+        kernelWarpDyCoords =
+            cudau::Kernel(cudaModule, "warpDyCoords", cudau::dim3(32), 0);
 
         size_t plpSize;
         CUDADRV_CHECK(cuModuleGetGlobal(&plpPtr, &plpSize, cudaModule, "plp"));
@@ -511,6 +514,8 @@ static bool g_takeScreenShot = false;
 static bool useSeparateNRC = false;
 
 static float log10RadianceScale = 1.f;
+
+static bool warpDyCoord = false;
 
 static ReSTIRRenderer curRenderer = ReSTIRRenderer::OriginalReSTIRBiased;
 
@@ -975,6 +980,11 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
         else if (0 == strncmp(arg, "-unbiased_restir", 17)) {
             curRenderer = ReSTIRRenderer::OriginalReSTIRUnbiased;
         }
+        else if (0 == strncmp(arg, "-warp_dynamic_coord", 18)) {
+            // warp query coordinates on dynamic objects into a canonical space
+            // at the moment only support one dynamic object 
+            warpDyCoord = true;
+        }
         else {
             printf("Unknown option: %s.\n", arg);
             exit(EXIT_FAILURE);
@@ -1267,6 +1277,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
     }
 
+    Matrix4x4 initDyObjMat; 
+    Matrix4x4 currentDyObjMat; // to ward dynamic object to canonical space
+    Matrix4x4 transMat;
+    CUdeviceptr transMatDevicePtr;
+    CUDADRV_CHECK(cuMemAlloc(&transMatDevicePtr, sizeof(transMat)));
+
     for (int i = 0; i < g_meshInstInfos.size(); ++i) {
         const MeshInstanceInfo &info = g_meshInstInfos[i];
         const Mesh* mesh = scene.meshes.at(info.name);
@@ -1289,9 +1305,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     info.endScale, info.endOrientation, info.endPosition,
                     info.frequency, info.initTime);
                 scene.instControllers.push_back(controller);
+                initDyObjMat = inst->matM2W;
             }
         }
     }
+
+    
 
     float3 sceneDim = scene.initialSceneAabb.maxP - scene.initialSceneAabb.minP;
     g_cameraPositionalMovingSpeed = 0.003f * std::max({ sceneDim.x, sceneDim.y, sceneDim.z });
@@ -2609,6 +2628,11 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 // TODO: まとめて送る。
                 CUDADRV_CHECK(cuMemcpyHtoDAsync(curInstDataBuffer.getCUdeviceptrAt(inst->instSlot),
                                                 &instData, sizeof(instData), cuStream));
+                currentDyObjMat = inst->matM2W;
+
+                transMat = currentDyObjMat.inverse() * initDyObjMat;
+                CUDADRV_CHECK(cuMemcpyHtoD(transMatDevicePtr, &transMat, sizeof(transMat)));
+                // std::cout << "Insta: " << i << ", trans: [" << inst->matM2W.m03 << "," << inst->matM2W.m13 << "," << inst->matM2W.m23 << "]\n";
             }
             curInstDataBuffer.unmap();
         }
@@ -2826,6 +2850,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 // std::cout << "<<<<<<<<<<<<<<<<<<<<\n"; 
 
 
+                if (warpDyCoord) {
+                    gpuEnv.kernelWarpDyCoords.launchWithThreadDim(
+                        cuStream, cudau::dim3(numInferenceQueries),
+                        inferenceRadianceQueryBuffer.getDevicePointer(),
+                        transMatDevicePtr
+                        );
+                }
 
                 neuralRadianceCache.infer(
                     cuStream,
@@ -2866,6 +2897,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     gpuEnv.kernelShuffleTrainingData.launchWithThreadDim(
                         cuStream, cudau::dim3(shared::numTrainingDataPerFrame));
                     curGPUTimer.shuffleTrainingData.stop(cuStream);
+
+
+                    if (warpDyCoord) {
+                        gpuEnv.kernelWarpDyCoords.launchWithThreadDim(
+                            cuStream, cudau::dim3(shared::numTrainingDataPerFrame),
+                            trainRadianceQueryBuffer[1].getDevicePointer(),
+                            transMatDevicePtr
+                            );
+                    }
 
                     // JP: トレーニングの実行。
                     // EN: Perform training.
@@ -2954,6 +2994,14 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 gpuEnv.pathTracing.setEntryPoint(PathTracingEntryPoint::visualizePrediction);
                 gpuEnv.pathTracing.optixPipeline.launch(
                     cuStream, plpOnDevice, renderTargetSizeX, renderTargetSizeY, 1);
+
+                if (warpDyCoord) {
+                    gpuEnv.kernelWarpDyCoords.launchWithThreadDim(
+                        cuStream, cudau::dim3(renderTargetSizeX * renderTargetSizeY),
+                        inferenceRadianceQueryBuffer.getDevicePointer(),
+                        transMatDevicePtr
+                        );
+                }
 
                 neuralRadianceCache.infer(
                     cuStream,
