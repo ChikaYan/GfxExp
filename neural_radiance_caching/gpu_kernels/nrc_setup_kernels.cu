@@ -4,6 +4,8 @@
 using namespace shared;
 
 #include <assert.h>
+#include <curand.h>
+#include <curand_kernel.h>
 
 CUDA_DEVICE_KERNEL void preprocessNRC(
     uint32_t offsetToSelectUnbiasedTile,
@@ -311,4 +313,35 @@ CUDA_DEVICE_KERNEL void warpDyCoords(
         query.position = (*warpMat) * query.position;
     }
 
+}
+
+CUDA_DEVICE_KERNEL void perturbCoords(
+    RadianceQuery* radianceQueryBuffer,
+    float3* trainedQueryPerturbs,
+    uint32_t numTrainedData
+) {
+    uint32_t linearIndex = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (linearIndex > numTrainedData) return;
+
+    // RadianceQuery query = plp.s->trainRadianceQueryBuffer[1][linearIndex];
+    RadianceQuery query = radianceQueryBuffer[linearIndex];
+
+    // curand_init(0, linearIndex, 0, &state[linearIndex]);
+    // float randx = curand_uniform(state+linearIndex);
+    // curand_init(1, linearIndex, 0, &state[linearIndex]);
+    // float randy = curand_uniform(state+linearIndex);
+    // curand_init(2, linearIndex, 0, &state[linearIndex]);
+    // float randz = curand_uniform(state+linearIndex);
+
+    // if (linearIndex == 0)
+    // printf("Before: [%f, %f, %f]\n", query.position.x, query.position.y, query.position.z);
+
+
+    query.position.x += trainedQueryPerturbs[linearIndex].x;
+    query.position.y += trainedQueryPerturbs[linearIndex].y;
+    query.position.z += trainedQueryPerturbs[linearIndex].z;
+
+    // if (linearIndex == 0)
+    //     printf("After: [%f, %f, %f]\n\n", query.position.x, query.position.y, query.position.z);
 }

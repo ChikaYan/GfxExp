@@ -66,8 +66,13 @@ EN: This program is an example implementation of Neural Radiance Caching (NRC) [
 
 */
 
+// namespace curand {
+//     #include <curand_kernel.h>
+// }
 #include "neural_radiance_caching_shared.h"
+// namespace our_common {
 #include "../common/common_host.h"
+// }
 #include "network_interface.h"
 
 // Include glfw3.h after our OpenGL definitions
@@ -81,7 +86,19 @@ EN: This program is an example implementation of Neural Radiance Caching (NRC) [
 #include <iostream>
 #include <filesystem>
 #include <fstream>
+#include <cassert>
 // #include <cstdio>
+
+// #include <stdio.h>
+// #include <curand.h>
+// #include <curand_kernel.h>
+// #include <math.h>
+// #include <assert.h>
+
+// #include "curand_warpper.cpp"
+
+#include <random>
+
 
 uint2 tileSizeDebug = uint2(0, 0);
 enum class GBufferEntryPoint {
@@ -113,6 +130,7 @@ enum class ReSTIRRenderer {
     RearchitectedReSTIRUnbiased,
 };
 
+
 struct GPUEnvironment {
     CUcontext cuContext;
     optixu::Context optixContext;
@@ -124,6 +142,7 @@ struct GPUEnvironment {
     cudau::Kernel kernelDecomposeTrainingData;
     cudau::Kernel kernelShuffleTrainingData;
     cudau::Kernel kernelWarpDyCoords;
+    cudau::Kernel kernelPerturbCoords;
     CUdeviceptr plpPtr;
 
     template <typename EntryPointType>
@@ -171,6 +190,8 @@ struct GPUEnvironment {
             cudau::Kernel(cudaModule, "shuffleTrainingData", cudau::dim3(32), 0);
         kernelWarpDyCoords =
             cudau::Kernel(cudaModule, "warpDyCoords", cudau::dim3(32), 0);
+        kernelPerturbCoords =
+            cudau::Kernel(cudaModule, "perturbCoords", cudau::dim3(32), 0);
 
         size_t plpSize;
         CUDADRV_CHECK(cuModuleGetGlobal(&plpPtr, &plpSize, cudaModule, "plp"));
@@ -516,6 +537,14 @@ static bool useSeparateNRC = false;
 static float log10RadianceScale = 1.f;
 
 static bool warpDyCoord = false;
+
+static bool perturbSmooth = false;
+
+static float perturbSmoothRange = 0.1f;
+
+static int perturbSmoothTimes = 1;
+
+static int perturbSmoothAfter = -1;
 
 static ReSTIRRenderer curRenderer = ReSTIRRenderer::OriginalReSTIRBiased;
 
@@ -985,6 +1014,23 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             // at the moment only support one dynamic object 
             warpDyCoord = true;
         }
+        else if (0 == strncmp(arg, "-perturb_smooth_range", 23)) {
+            // enforcing smoothness in MLP prediction by perturbing train query and encourage same output
+            perturbSmoothRange = atof(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-perturb_smooth_times", 23)) {
+            perturbSmoothTimes = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-perturb_smooth_after", 23)) {
+            perturbSmoothAfter = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-perturb_smooth", 15)) {
+            // enforcing smoothness in MLP prediction by perturbing train query and encourage same output
+            perturbSmooth = true;
+        }
         else {
             printf("Unknown option: %s.\n", arg);
             exit(EXIT_FAILURE);
@@ -1410,6 +1456,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
     NRCConfig.numHiddenLayers = g_numHiddenLayers;
     NRCConfig.learningRate = g_learningRate;
 
+    std::cout << NRCConfig.numHiddenLayers << "\n";
+    std::cout << NRCConfig.hiddenLayerWidth << "\n";
+
     neuralRadianceCache.initialize(NRCConfig);
     neuralRadianceCacheSpecular.initialize(NRCConfig);
 
@@ -1465,6 +1514,22 @@ int32_t main(int32_t argc, const char* argv[]) try {
     cudau::TypedBuffer<float3> inferredRadianceBuffer;
     cudau::TypedBuffer<float3> inferredRadianceBuffer2;
     cudau::TypedBuffer<float3> perFrameContributionBuffer;
+    cudau::TypedBuffer<float3> inferredTrainRadianceBuffer; // for perturb smooth
+    // curand::curandState *curand_state;
+    // cudaMalloc(&curand_state, sizeof(curand::curandState));
+
+    std::random_device dev;
+    std::mt19937 global_rng(dev());
+    std::uniform_real_distribution<float> float_dist(-perturbSmoothRange, perturbSmoothRange);
+
+    CUdeviceptr trainedQueryPerturbDevicePtr;
+    float3 trainedQueryPerturbs[50000];
+
+    CUDADRV_CHECK(cuMemAlloc(&trainedQueryPerturbDevicePtr, sizeof(trainedQueryPerturbs)));
+
+    // for (int i=0; i<16; ++i)
+    //     std::cout << float_dist(global_rng) << "\n";
+
 
     const auto initializeScreenRelatedBuffers = [&]() {
         uint32_t numPixels = renderTargetSizeX * renderTargetSizeY;
@@ -1538,6 +1603,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         inferenceTerminalInfoBuffer.initialize(gpuEnv.cuContext, Scene::bufferType, numPixels);
         inferredRadianceBuffer.initialize(
             gpuEnv.cuContext, Scene::bufferType, inferenceBatchSize);
+        inferredTrainRadianceBuffer.initialize(
+            gpuEnv.cuContext, Scene::bufferType, inferenceBatchSize);
         inferredRadianceBuffer2.initialize(
             gpuEnv.cuContext, Scene::bufferType, inferenceBatchSize);
         perFrameContributionBuffer.initialize(gpuEnv.cuContext, Scene::bufferType, numPixels);
@@ -1546,6 +1613,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     const auto finalizeScreenRelatedBuffers = [&]() {
         perFrameContributionBuffer.finalize();
         inferredRadianceBuffer.finalize();
+        inferredTrainRadianceBuffer.finalize();
         inferredRadianceBuffer2.finalize();
         inferenceTerminalInfoBuffer.finalize();
         inferenceRadianceQueryBuffer.finalize();
@@ -1614,6 +1682,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
         inferenceRadianceQueryBuffer.resize(inferenceBatchSize);
         inferenceTerminalInfoBuffer.resize(numPixels);
         inferredRadianceBuffer.resize(inferenceBatchSize);
+        inferredTrainRadianceBuffer.resize(inferenceBatchSize);
         inferredRadianceBuffer2.resize(inferenceBatchSize);
         perFrameContributionBuffer.resize(numPixels);
     };
@@ -2461,6 +2530,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                             NRCConfig.posEnc = g_positionEncoding;
                             NRCConfig.numHiddenLayers = g_numHiddenLayers;
                             NRCConfig.learningRate = g_learningRate;
+                            std::cout << NRCConfig.numHiddenLayers << "\n";
+                            std::cout << NRCConfig.hiddenLayerWidth << "\n";
                             neuralRadianceCache.initialize(NRCConfig);
                             resetAccumulation = true;
                         }
@@ -2966,12 +3037,50 @@ int32_t main(int32_t argc, const char* argv[]) try {
 
                                     lossValue += lossValueSpecular;
                             } else {
+                                // assert(batchSize <= inferenceBatchSize);
+                                
+                                if (perturbSmooth)
+                                    neuralRadianceCache.infer(
+                                        cuStream,
+                                        reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                        batchSize,
+                                        reinterpret_cast<float*>(inferredTrainRadianceBuffer.getDevicePointer()));
+
                                 neuralRadianceCache.train(
                                     cuStream,
                                     reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
                                     reinterpret_cast<float*>(trainTargetBuffer[1].getDevicePointerAt(dataStartIndex)),
                                     batchSize,
                                     (showLossValue && step == 3) ? &lossValue : nullptr);
+
+
+                                if ((perturbSmooth) && (perturbSmoothAfter < (int)frameIndex)) {
+                                    // perturb trained queries to locate at nearby locations
+                                    for (int perturbi=0; perturbi < perturbSmoothTimes; ++perturbi){
+                                        for (int randi=0; randi < batchSize; ++randi){
+                                            trainedQueryPerturbs[randi].x = float_dist(global_rng);
+                                            trainedQueryPerturbs[randi].y = float_dist(global_rng);
+                                            trainedQueryPerturbs[randi].z = float_dist(global_rng);
+                                        }
+
+                                        CUDADRV_CHECK(cuMemcpyHtoD(trainedQueryPerturbDevicePtr, trainedQueryPerturbs, sizeof(float3) * batchSize));
+
+                                        gpuEnv.kernelPerturbCoords.launchWithThreadDim(
+                                            cuStream, cudau::dim3(batchSize), 
+                                            trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex),
+                                            trainedQueryPerturbDevicePtr,
+                                            batchSize);
+
+                                        neuralRadianceCache.train(
+                                            cuStream,
+                                            reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
+                                            reinterpret_cast<float*>(inferredTrainRadianceBuffer.getDevicePointerAt(dataStartIndex)),
+                                            batchSize,
+                                            (showLossValue && step == 3) ? &lossValue : nullptr);
+                                    }
+                                }
+
+
                             }
 
                             dataStartIndex += batchSize;
