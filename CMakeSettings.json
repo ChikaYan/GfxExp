@@ -9,7 +9,10 @@
       "installRoot": "C:\\nonsys\\workspace\\GfxExp\\out\\install\\${name}",
       "cmakeCommandArgs": "",
       "buildCommandArgs": "",
-      "ctestCommandArgs": ""
+      "ctestCommandArgs": "",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "C:/nonsys/workspace/GfxExp/ext/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      }
     }
   ]
 }

@@ -9,6 +9,12 @@ def cmd(command):
 
 
 confs = [
+    # "bistro_old/test",
+    # "bistro_old/hash_lv=4/nrc_only_emit",
+    # "bistro_old/nrc_only_emit",
+    # "bistro_old/pt1",
+
+
     # "bistro/separate/test",
     # "bistro/separate/nrc",
     # "bistro/separate/nrc_only",
@@ -40,6 +46,8 @@ confs = [
     # "cornell_box/separate/nrc_specular",
 
     # "cornell_box_dy/test",
+    # "cornell_box_dy/save_query",
+    # "cornell_box_dy/save_query_2",
     # "cornell_box_dy/pt_1024",
     # "cornell_box_dy/nrc_only_emit",
     # "cornell_box_dy/motion_tri/2",
@@ -81,9 +89,13 @@ confs = [
     # "living_room_dy_tex/other_smooth/",
     # "living_room_dy_tex/other_smooth/small_mlp",
     # "living_room_dy_tex/other_smooth/small_mlp_grid_lv_2",
-    "living_room_dy_tex/other_smooth/d_1_w_16_lv_2_high_lr",
-    "living_room_dy_tex/other_smooth/d_2_w_8_lv_2",
-    "living_room_dy_tex/other_smooth/d_2_w_16_lv_2",
+    # "living_room_dy_tex/other_smooth/d_1_w_16_lv_2_high_lr",
+    # "living_room_dy_tex/other_smooth/d_2_w_8_lv_2",
+    # "living_room_dy_tex/other_smooth/d_2_w_16_lv_2",
+
+
+    # "living_room_dy_light/test"
+    "living_room_dy_light/save_query"
 ]
 
 # conf_name = "bistro/test"
@@ -94,16 +106,15 @@ confs = [
 
 def run(conf_name):
     EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
+    # EXE_PATH = "C:/nonsys/workspace/GfxExp/build_python/bin/Release/neural_radiance_caching.exe"
     CONF_PATH = f"configs/{conf_name}.yaml"
     EXP_NAME = conf_name
 
-    # SCENE_PATH = "C:/nonsys/workspace/GfxExp/scene/Bistro_v5_2/Bistro_v5_2/BistroExterior.fbx"
 
     with open(CONF_PATH, 'r') as file:
         conf = yaml.safe_load(file)
 
     conf['exp_name'] = EXP_NAME
-    # conf['object0']['obj'] = f"{SCENE_PATH} 1.0 simple_pbr"
 
     c = f"{EXE_PATH} "
 
@@ -116,6 +127,7 @@ def run(conf_name):
         else:
             c += f"-{arg} {conf[arg] if conf[arg] is not None else ''} "
 
+    # run NRC in C++
     cmd(c)
 
     with open(f"./exp/{conf['exp_name']}/cmd.txt", "w") as f:

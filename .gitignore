@@ -286,3 +286,9 @@ flip/
 scene/
 
 configs/
+
+test_build/
+
+build_working/
+
+build_python/

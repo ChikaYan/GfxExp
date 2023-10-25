@@ -9,7 +9,7 @@ enum class PositionEncoding {
 
 struct NeuralRadianceCacheConfig {
     PositionEncoding posEnc = PositionEncoding::HashGrid;
-    uint32_t numHiddenLayers = 5;
+    uint32_t numHiddenLayers = 8;
     uint32_t hiddenLayerWidth = 64;
     float learningRate = 1e-2f;
     uint32_t hashNLevels = 16;

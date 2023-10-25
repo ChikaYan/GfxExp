@@ -4,6 +4,11 @@ file(
     GLOB_RECURSE SOURCES
     *.h *.hpp *.c *.cpp)
 
+# set(
+#     CMAKE_TOOLCHAIN_FILE
+#     "C:/nonsys/workspace/GfxExp/ext/vcpkg/scripts/buildsystems/vcpkg.cmake"
+# )
+
 set(
     CUDA_KERNELS
     "gpu_kernels/nrc_setup_kernels.cu"
@@ -106,8 +111,27 @@ target_include_directories(
     "../ext/tiny-cuda-nn/dependencies"
     "../ext/tiny-cuda-nn/include"
 )
+# find_package(jsoncpp CONFIG REQUIRED)
+# find_package(Python REQUIRED COMPONENTS Interpreter Development)
 target_link_libraries(
     "${TARGET_NAME}"
     fakelib
     tiny-cuda-nn
-)
+    )
+    # JsonCpp::JsonCpp
+    
+# set(
+#     jsoncpp_DIR
+#     "C:/nonsys/workspace/GfxExp/ext/vcpkg/packages/jsoncpp_x64-windows/share/jsoncpp"
+# )
+# target_link_libraries("${TARGET_NAME}" )
+
+
+# target_include_directories(${PROJECT_NAME} PRIVATE
+#         ${Python_INCLUDE_DIRS})
+
+# target_link_directories(${PROJECT_NAME} PRIVATE
+#         ${Python_LIBRARY_DIRS})
+
+# target_link_libraries(${PROJECT_NAME} PRIVATE
+#         ${Python_LIBRARIES})

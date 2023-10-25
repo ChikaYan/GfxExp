@@ -4,8 +4,8 @@
 using namespace shared;
 
 #include <assert.h>
-#include <curand.h>
-#include <curand_kernel.h>
+// #include <curand.h>
+// #include <curand_kernel.h>
 
 CUDA_DEVICE_KERNEL void preprocessNRC(
     uint32_t offsetToSelectUnbiasedTile,
@@ -51,6 +51,7 @@ CUDA_DEVICE_KERNEL void preprocessNRC(
 }
 
 CUDA_DEVICE_KERNEL void accumulateInferredRadianceValues() {
+    // this is for rendering of NRC results in paper suggested way only
     uint32_t linearIndex = blockDim.x * blockIdx.x + threadIdx.x;
     uint32_t numPixels = plp.s->imageSize.x * plp.s->imageSize.y;
     if (linearIndex >= numPixels)
@@ -116,7 +117,7 @@ CUDA_DEVICE_KERNEL void propagateRadianceValues() {
         return;
 
     float3 contribution = make_float3(0.0f, 0.0f, 0.0f);
-    if (terminalInfo.hasQuery) { // what is this? why is it needed? self train?
+    if (terminalInfo.hasQuery) {
         uint32_t offset = plp.s->imageSize.x * plp.s->imageSize.y;
         contribution = max(plp.s->inferredRadianceBuffer[offset + linearIndex], make_float3(0.0f, 0.0f, 0.0f));
         if (plp.f->radianceScale > 0)
@@ -143,7 +144,7 @@ CUDA_DEVICE_KERNEL void propagateRadianceValues() {
     uint32_t lastTrainDataIndex = terminalInfo.prevVertexDataIndex;
     while (lastTrainDataIndex != invalidVertexDataIndex) {
         const TrainingVertexInfo &vertexInfo = plp.s->trainVertexInfoBuffer[lastTrainDataIndex];
-        float3 &targetValue = plp.s->trainTargetBuffer[0][lastTrainDataIndex]; // targetValue point to same memory of plp.s->trainTargetBuffer[0][lastTrainDataIndex]
+        float3 &targetValue = plp.s->trainTargetBuffer[0][lastTrainDataIndex]; 
         float3 indirectCont = vertexInfo.localThroughput * contribution;
         contribution = targetValue + indirectCont;
 
@@ -175,7 +176,8 @@ CUDA_DEVICE_KERNEL void shuffleTrainingData() {
         LinearCongruentialGenerator &shuffler = plp.s->dataShufflerBuffer[linearIndex];
         static_assert((numTrainingDataPerFrame & (numTrainingDataPerFrame - 1)) == 0,
                       "The number of traing data is assumed to be the power of 2 here.");
-        uint32_t dstIdx = shuffler.next() % numTrainingDataPerFrame;
+        // uint32_t dstIdx = shuffler.next() % numTrainingDataPerFrame;
+        uint32_t dstIdx = linearIndex % numTrainingDataPerFrame;
 
         // JP: パストレーサーが生成したサンプル数が足りないときはラップアラウンドする。
         // EN: Wrap around for the case where the path tracer generates too few samples.

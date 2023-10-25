@@ -205,6 +205,10 @@ CUDA_DEVICE_KERNEL void visualizeToOutputBuffer(
                 value *= make_float4(0.25f, 1.0f, 0.25f, 1.0f);
         }
     }
+    
+    // if (linearIndex == 0){
+    //     printf("[%f, %f, %f]", value.x, value.y, value.z);
+    // }
 
     outputBuffer.write(launchIndex, value);
 }

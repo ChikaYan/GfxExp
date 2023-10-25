@@ -100,6 +100,11 @@ EN: This program is an example implementation of Neural Radiance Caching (NRC) [
 #include <random>
 
 
+// #include "json/json.h"
+// #include <json/json.h>
+#include "json.hpp"
+
+
 uint2 tileSizeDebug = uint2(0, 0);
 enum class GBufferEntryPoint {
     setupGBuffers = 0,
@@ -456,6 +461,52 @@ class CsvLogger{
 
 };
 
+nlohmann::json logQueryToJson(shared::RadianceQuery query){
+    
+    nlohmann::json jsonQuery;
+
+    jsonQuery["position"] = {
+        query.position.x, 
+        query.position.y, 
+        query.position.z
+        }; 
+
+    jsonQuery["motion"] = {
+        query.motion.x, 
+        query.motion.y, 
+        query.motion.z
+        }; 
+
+    jsonQuery["diffuse_reflectance"] = {
+        query.diffuseReflectance.x, 
+        query.diffuseReflectance.y, 
+        query.diffuseReflectance.z
+        }; 
+
+    jsonQuery["specular_reflectance"] = {
+        query.specularReflectance.x, 
+        query.specularReflectance.y, 
+        query.specularReflectance.z
+        }; 
+
+    jsonQuery["normal_phi"] = 
+        query.normal_phi; 
+
+    jsonQuery["normal_theta"] = 
+        query.normal_theta; 
+
+    jsonQuery["vOut_phi"] = 
+        query.vOut_phi; 
+
+    jsonQuery["vOut_theta"] = 
+        query.vOut_theta; 
+
+    jsonQuery["roughness"] = 
+        query.roughness;     
+
+    return jsonQuery;
+}
+
 
 struct KeyState {
     uint64_t timesLastChanged[5];
@@ -539,6 +590,8 @@ static float log10RadianceScale = 1.f;
 static bool warpDyCoord = false;
 
 static bool perturbSmooth = false;
+
+static bool savePyCache = false;
 
 static float perturbSmoothRange = 0.1f;
 
@@ -1030,6 +1083,10 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
         else if (0 == strncmp(arg, "-perturb_smooth", 15)) {
             // enforcing smoothness in MLP prediction by perturbing train query and encourage same output
             perturbSmooth = true;
+        }
+        else if (0 == strncmp(arg, "-save_py_cache", 15)) {
+            // save radiance querys to run the neural networks in python
+            savePyCache = true;
         }
         else {
             printf("Unknown option: %s.\n", arg);
@@ -2774,8 +2831,15 @@ int32_t main(int32_t argc, const char* argv[]) try {
         CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice, &plp, sizeof(plp), cuStream));
         CUDADRV_CHECK(cuMemcpyHtoDAsync(gpuEnv.plpPtr, &plp, sizeof(plp), cuStream));
 
-        for (int spp_i = 0; spp_i < SPP; ++spp_i)    
+        for (int sppId = 0; sppId < SPP; ++sppId)    
         {           
+            
+            nlohmann::json framePyCache;
+
+            framePyCache["frame_id"] = frameIndex;
+            framePyCache["spp_id"] = sppId;
+
+
              // JP: Gバッファーのセットアップ。
             //     ここではレイトレースを使ってGバッファーを生成しているがもちろんラスタライザーで生成可能。
             // EN: Setup the G-buffers.
@@ -2942,13 +3006,48 @@ int32_t main(int32_t argc, const char* argv[]) try {
                         reinterpret_cast<float*>(inferredRadianceBuffer2.getDevicePointer()));
                 curGPUTimer.infer.stop(cuStream);
 
-                // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。
-                // EN: Accumulate the predicted radiance values to the pixels to complete the current frame.
-                curGPUTimer.accumulateInferredRadiances.start(cuStream);
-                gpuEnv.kernelAccumulateInferredRadianceValues(
-                    cuStream,
-                    gpuEnv.kernelAccumulateInferredRadianceValues.calcGridDim(renderTargetSizeX * renderTargetSizeY));
-                curGPUTimer.accumulateInferredRadiances.stop(cuStream);
+                if (savePyCache){
+                    for (int batchID=0; batchID < numInferenceQueries; ++batchID){
+                        shared::RadianceQuery queryBufferHost;
+                        CUDADRV_CHECK(cuMemcpyDtoHAsync(&queryBufferHost, inferenceRadianceQueryBuffer.getCUdeviceptrAt(batchID),
+                                        sizeof(queryBufferHost), cuStream));
+
+                        framePyCache["pre_train_infer"][batchID] = logQueryToJson(queryBufferHost);
+                    }
+                    
+                    for (int batchID=0; batchID < maxNumTrainingSuffixes; ++batchID){
+                        // also cache terminal info
+                        shared::TrainingSuffixTerminalInfo terminalInfoHost;
+                        CUDADRV_CHECK(cuMemcpyDtoHAsync(&terminalInfoHost, trainSuffixTerminalInfoBuffer.getCUdeviceptrAt(batchID),
+                                        sizeof(terminalInfoHost), cuStream));
+                        framePyCache["pre_train_infer"][batchID]["prev_vertex_data_index"] = (long int)terminalInfoHost.prevVertexDataIndex;
+                        framePyCache["pre_train_infer"][batchID]["has_query"] = (int)terminalInfoHost.hasQuery;
+
+                    }
+
+
+                    for (int batchID=0; batchID < shared::trainBufferSize; ++batchID){
+                        shared::TrainingVertexInfo trainVertexInfoHost;
+                        CUDADRV_CHECK(cuMemcpyDtoHAsync(&trainVertexInfoHost, trainVertexInfoBuffer.getCUdeviceptrAt(batchID),
+                                        sizeof(trainVertexInfoHost), cuStream));
+                        framePyCache["train_vertex"][batchID]["prev_vertex_data_index"] = (long int)trainVertexInfoHost.prevVertexDataIndex;
+                        framePyCache["train_vertex"][batchID]["local_throughput"] = {trainVertexInfoHost.localThroughput.x, trainVertexInfoHost.localThroughput.y, trainVertexInfoHost.localThroughput.z};
+
+                        float3 trainTargetBufferHost;
+                        CUDADRV_CHECK(cuMemcpyDtoHAsync(&trainTargetBufferHost, trainTargetBuffer[0].getCUdeviceptrAt(batchID),
+                                        sizeof(trainTargetBufferHost), cuStream));
+                        framePyCache["train_vertex"][batchID]["target_train_buffer"] = {trainTargetBufferHost.x, trainTargetBufferHost.y, trainTargetBufferHost.z};
+                    }
+                
+                }
+
+                // // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。
+                // // EN: Accumulate the predicted radiance values to the pixels to complete the current frame.
+                // curGPUTimer.accumulateInferredRadiances.start(cuStream);
+                // gpuEnv.kernelAccumulateInferredRadianceValues(
+                //     cuStream,
+                //     gpuEnv.kernelAccumulateInferredRadianceValues.calcGridDim(renderTargetSizeX * renderTargetSizeY));
+                // curGPUTimer.accumulateInferredRadiances.stop(cuStream);
 
                 prevTrainDone = false;
                 if (train || stepTrain) {
@@ -2968,6 +3067,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     gpuEnv.kernelShuffleTrainingData.launchWithThreadDim(
                         cuStream, cudau::dim3(shared::numTrainingDataPerFrame));
                     curGPUTimer.shuffleTrainingData.stop(cuStream);
+
+                    // debug
 
 
                     if (warpDyCoord) {
@@ -3046,6 +3147,29 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                         batchSize,
                                         reinterpret_cast<float*>(inferredTrainRadianceBuffer.getDevicePointer()));
 
+
+
+                                // std::ofstream o("pretty.json");
+                                // o << std::setw(4) << framePyCache << std::endl;
+                                // exit(0);
+
+                                if (savePyCache){
+                                    for (int batchID=0; batchID < batchSize; ++batchID){
+                                        shared::RadianceQuery trainRadianceQueryBufferHost;
+                                        CUDADRV_CHECK(cuMemcpyDtoHAsync(&trainRadianceQueryBufferHost, trainRadianceQueryBuffer[1].getCUdeviceptrAt(dataStartIndex+batchID),
+                                                        sizeof(trainRadianceQueryBufferHost), cuStream));
+
+                                        framePyCache["train_query"][dataStartIndex+batchID] = logQueryToJson(trainRadianceQueryBufferHost);
+
+                                        float3 trainTargetBufferHost;
+                                        CUDADRV_CHECK(cuMemcpyDtoHAsync(&trainTargetBufferHost, trainTargetBuffer[1].getCUdeviceptrAt(dataStartIndex+batchID),
+                                                        sizeof(trainTargetBufferHost), cuStream));
+                                        framePyCache["train_query"][dataStartIndex+batchID]["target"] = {trainTargetBufferHost.x, trainTargetBufferHost.y, trainTargetBufferHost.z};
+
+                                        // std::cout << trainRadianceQueryBufferHost.position.x << "\n";
+                                    }
+                                }
+
                                 neuralRadianceCache.train(
                                     cuStream,
                                     reinterpret_cast<float*>(trainRadianceQueryBuffer[1].getDevicePointerAt(dataStartIndex)),
@@ -3117,6 +3241,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     reinterpret_cast<float*>(inferenceRadianceQueryBuffer.getDevicePointer()),
                     renderTargetSizeX * renderTargetSizeY,
                     reinterpret_cast<float*>(inferredRadianceBuffer.getDevicePointer()));
+
+                if (savePyCache){
+                    for (int batchID=0; batchID < renderTargetSizeX * renderTargetSizeY; ++batchID){
+                        shared::RadianceQuery queryBufferHost;
+                        CUDADRV_CHECK(cuMemcpyDtoHAsync(&queryBufferHost, inferenceRadianceQueryBuffer.getCUdeviceptrAt(batchID),
+                                        sizeof(queryBufferHost), cuStream));
+
+                        framePyCache["rendering_infer"][batchID] = logQueryToJson(queryBufferHost); 
+                    }
+                }
+
                 if (useSeparateNRC)
                     neuralRadianceCacheSpecular.infer(
                         cuStream,
@@ -3127,9 +3262,17 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 curGPUTimer.visualizeCache.stop(cuStream);
             }
 
+            // write json
+            if (savePyCache){
+                std::string filename = expPath + std::format("/query_frame_{:03}_spp_{:03}.json", frameIndex, sppId);
+                std::ofstream o(filename);
+                o << std::setw(2) << framePyCache << std::endl;
+                // exit(0);
+            }
+
             // JP: 結果をリニアバッファーにコピーする。(法線の正規化も行う。)
             // EN: Copy the results to the linear buffers (and normalize normals).
-            if (spp_i == 0){
+            if (sppId == 0){
                 kernelCopyToLinearBuffers.launchWithThreadDim(
                     cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
                     beautyAccumBuffer.getSurfaceObject(0),
@@ -3155,7 +3298,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
                     uint2(renderTargetSizeX, renderTargetSizeY));
             }
 
-            if (spp_i == SPP-1){
+            if (sppId == SPP-1){
             kernelAvgLinearBuffers.launchWithThreadDim(
                 cuStream, cudau::dim3(renderTargetSizeX, renderTargetSizeY),
                 linearBeautyBuffer,
