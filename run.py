@@ -62,6 +62,8 @@ confs = [
     # "living_room_dy/motion_tri/2_spp_16",
     # "living_room_dy/motion_tri/6",
     # "living_room_dy/motion_tri/12",
+    "living_room_dy/motion_tri/2_tri",
+    "living_room_dy/motion_tri/6_tri",
 
     # "living_room_dy_tex/test"
     # "living_room_dy_tex/pt_512",
@@ -95,7 +97,7 @@ confs = [
 
 
     # "living_room_dy_light/test"
-    "living_room_dy_light/save_query"
+    # "living_room_dy_light/save_query"
 ]
 
 # conf_name = "bistro/test"

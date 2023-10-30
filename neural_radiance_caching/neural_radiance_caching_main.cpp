@@ -3041,13 +3041,13 @@ int32_t main(int32_t argc, const char* argv[]) try {
                 
                 }
 
-                // // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。
-                // // EN: Accumulate the predicted radiance values to the pixels to complete the current frame.
-                // curGPUTimer.accumulateInferredRadiances.start(cuStream);
-                // gpuEnv.kernelAccumulateInferredRadianceValues(
-                //     cuStream,
-                //     gpuEnv.kernelAccumulateInferredRadianceValues.calcGridDim(renderTargetSizeX * renderTargetSizeY));
-                // curGPUTimer.accumulateInferredRadiances.stop(cuStream);
+                // JP: 各ピクセルに推定した輝度を加算して現在のフレームを完成させる。
+                // EN: Accumulate the predicted radiance values to the pixels to complete the current frame.
+                curGPUTimer.accumulateInferredRadiances.start(cuStream);
+                gpuEnv.kernelAccumulateInferredRadianceValues(
+                    cuStream,
+                    gpuEnv.kernelAccumulateInferredRadianceValues.calcGridDim(renderTargetSizeX * renderTargetSizeY));
+                curGPUTimer.accumulateInferredRadiances.stop(cuStream);
 
                 prevTrainDone = false;
                 if (train || stepTrain) {

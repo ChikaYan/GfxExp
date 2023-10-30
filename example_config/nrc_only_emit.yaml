@@ -1,0 +1,38 @@
+
+# Experiment
+exp_name:
+frame_num: 100
+save_img_every: 1
+unbiased_restir:
+render_mode: nrc_only_emit
+position-encoding: hash-grid
+
+# Camera
+cam-pos: -0.917 1.115 3.081
+cam-roll: 1.845
+cam-pitch: 9.718
+cam-yaw: 51.213
+
+# Scene
+object0:
+  brightness: 2.0
+  name: scene 
+  obj: C:\nonsys\workspace\GfxExp\scene\living_room\living_room.obj 1.0 simple_pbr
+  inst: scene
+
+# Dynamics
+object1:
+  name: geodesic 
+  obj: C:\nonsys\workspace\GfxExp\scene\geodesic\geodesic_classI_2.obj 0.2 simple_pbr
+begin-pos: 0.738 0.665 4.254
+end-pos: 0.738 1.5 4.254
+freq: 1
+time: 0.
+inst: geodesic
+
+
+# Extra configs
+no-cmd:
+  parse_tb: true
+  gt_dir: C:\nonsys\workspace\GfxExp\exp\living_room_dy\pt_512
+  log_gt: false
