@@ -33,9 +33,11 @@ CUDA_DEVICE_KERNEL void preprocessNRC(
             newTileSize = make_uint2(min(max(newTileSize.x, 4u), 128u),
                                      min(max(newTileSize.y, 4u), 128u));
         }
+        newTileSize = make_uint2(1, 1);
         *plp.s->tileSize[bufIdx] = newTileSize;
 
         *plp.s->numTrainingData[bufIdx] = 0;
+        *plp.s->numIntermediateTrainingData[bufIdx] = 0;
         *plp.s->offsetToSelectUnbiasedTile = offsetToSelectUnbiasedTile;
         *plp.s->offsetToSelectTrainingPath = offsetToSelectTrainingPath;
 
@@ -117,25 +119,25 @@ CUDA_DEVICE_KERNEL void propagateRadianceValues() {
         return;
 
     float3 contribution = make_float3(0.0f, 0.0f, 0.0f);
-    if (terminalInfo.hasQuery) {
-        uint32_t offset = plp.s->imageSize.x * plp.s->imageSize.y;
-        contribution = max(plp.s->inferredRadianceBuffer[offset + linearIndex], make_float3(0.0f, 0.0f, 0.0f));
-        if (plp.f->radianceScale > 0)
-            contribution /= plp.f->radianceScale;
+    // if (terminalInfo.hasQuery) {
+    //     uint32_t offset = plp.s->imageSize.x * plp.s->imageSize.y;
+    //     contribution = max(plp.s->inferredRadianceBuffer[offset + linearIndex], make_float3(0.0f, 0.0f, 0.0f));
+    //     if (plp.f->radianceScale > 0)
+    //         contribution /= plp.f->radianceScale;
 
-        if constexpr (useReflectanceFactorization) {
-            const RadianceQuery &terminalQuery = plp.s->inferenceRadianceQueryBuffer[offset + linearIndex];
-            if (!plp.f->useSeparateNRC){
-                contribution *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
-            }
-            else {
-                float3 contribution2 = max(plp.s->inferredRadianceBuffer2[offset + linearIndex], make_float3(0.0f, 0.0f, 0.0f));
-                if (plp.f->radianceScale > 0) 
-                    contribution2 /= plp.f->radianceScale;
-                contribution = (contribution * terminalQuery.diffuseReflectance + contribution2 * terminalQuery.specularReflectance);
-            }
-        }
-    }
+    //     if constexpr (useReflectanceFactorization) {
+    //         const RadianceQuery &terminalQuery = plp.s->inferenceRadianceQueryBuffer[offset + linearIndex];
+    //         if (!plp.f->useSeparateNRC){
+    //             contribution *= (terminalQuery.diffuseReflectance + terminalQuery.specularReflectance);
+    //         }
+    //         else {
+    //             float3 contribution2 = max(plp.s->inferredRadianceBuffer2[offset + linearIndex], make_float3(0.0f, 0.0f, 0.0f));
+    //             if (plp.f->radianceScale > 0) 
+    //                 contribution2 /= plp.f->radianceScale;
+    //             contribution = (contribution * terminalQuery.diffuseReflectance + contribution2 * terminalQuery.specularReflectance);
+    //         }
+    //     }
+    // }
 
     // JP: 各Training Vertexのローカルスループットを乗じながら再帰的にネットワークから与えられた輝度を
     //     伝播させることで訓練データを完成させる。

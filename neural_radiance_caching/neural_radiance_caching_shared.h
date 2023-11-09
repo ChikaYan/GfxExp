@@ -8,14 +8,16 @@
 namespace shared {
     static constexpr float probToSampleEnvLight = 0.25f;
     static constexpr float pathTerminationFactor = 0.01f; // c in the paper.
-    static constexpr uint32_t numTrainingDataPerFrame = 1 << 16;
+    // static constexpr float pathTerminationFactor = 0.001f; // c in the paper.
+    // static constexpr uint32_t numTrainingDataPerFrame = 1 << 16;
+    static constexpr uint32_t numTrainingDataPerFrame = 512*512;
     static constexpr uint32_t trainBufferSize = 2 * numTrainingDataPerFrame;
     static constexpr bool useReflectanceFactorization = true;
 
     static constexpr uint32_t numLightSubsets = 128;
     static constexpr uint32_t lightSubsetSize = 1024;
-    static constexpr int tileSizeX = 8;
-    static constexpr int tileSizeY = 8;
+    static constexpr int tileSizeX = 1;
+    static constexpr int tileSizeY = 1;
 
 
 
@@ -352,6 +354,7 @@ namespace shared {
 
         uint32_t maxNumTrainingSuffixes;
         uint32_t* numTrainingData[2];
+        uint32_t* numIntermediateTrainingData[2];
         uint2* tileSize[2];
         float3AsOrderedInt* targetMinMax[2];
         float3* targetAvg[2];

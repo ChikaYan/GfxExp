@@ -47,6 +47,7 @@ confs = [
 
     # "cornell_box_dy/test",
     # "cornell_box_dy/save_query",
+    "cornell_box_dy/save_query_spp_4",
     # "cornell_box_dy/save_query_2",
     # "cornell_box_dy/pt_1024",
     # "cornell_box_dy/nrc_only_emit",
@@ -62,8 +63,13 @@ confs = [
     # "living_room_dy/motion_tri/2_spp_16",
     # "living_room_dy/motion_tri/6",
     # "living_room_dy/motion_tri/12",
-    "living_room_dy/motion_tri/2_tri",
-    "living_room_dy/motion_tri/6_tri",
+    # "living_room_dy/motion_tri/2_tri",
+    # "living_room_dy/motion_tri/6_tri",
+
+    # "living_room_diffuse/test",
+    # "living_room_diffuse/test_restir",
+    # "living_room_diffuse/nrc_only_emit_spp_32_tri_2_low_lr_2",
+    # "living_room_diffuse/pt_32",
 
     # "living_room_dy_tex/test"
     # "living_room_dy_tex/pt_512",
@@ -108,7 +114,8 @@ confs = [
 
 def run(conf_name):
     EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
-    # EXE_PATH = "C:/nonsys/workspace/GfxExp/build_python/bin/Release/neural_radiance_caching.exe"
+    # EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/restir.exe"
+    # EXE_PATH = "C:/nonsys/workspace/GfxExp/original_copy/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
     CONF_PATH = f"configs/{conf_name}.yaml"
     EXP_NAME = conf_name
 
