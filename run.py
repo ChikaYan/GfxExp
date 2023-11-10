@@ -47,7 +47,7 @@ confs = [
 
     # "cornell_box_dy/test",
     # "cornell_box_dy/save_query",
-    "cornell_box_dy/save_query_spp_4",
+    # "cornell_box_dy/save_query_spp_4",
     # "cornell_box_dy/save_query_2",
     # "cornell_box_dy/pt_1024",
     # "cornell_box_dy/nrc_only_emit",
@@ -67,7 +67,7 @@ confs = [
     # "living_room_dy/motion_tri/6_tri",
 
     # "living_room_diffuse/test",
-    # "living_room_diffuse/test_restir",
+    "living_room_diffuse/test_restir",
     # "living_room_diffuse/nrc_only_emit_spp_32_tri_2_low_lr_2",
     # "living_room_diffuse/pt_32",
 
@@ -113,7 +113,9 @@ confs = [
 # conf_name = "bistro/hash_lv=4/nrc_tri_low_fre"
 
 def run(conf_name):
-    EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
+    # EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
+    EXE_PATH = "C:/nonsys/workspace/gfxexp_original/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
+    # EXE_PATH = "C:/nonsys/workspace/gfxexp_original/GfxExp/build/bin/Debug/restir.exe"
     # EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/restir.exe"
     # EXE_PATH = "C:/nonsys/workspace/GfxExp/original_copy/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
     CONF_PATH = f"configs/{conf_name}.yaml"
@@ -122,8 +124,9 @@ def run(conf_name):
 
     with open(CONF_PATH, 'r') as file:
         conf = yaml.safe_load(file)
-
-    conf['exp_name'] = EXP_NAME
+        
+    if 'exp_name' in conf.keys():
+        conf['exp_name'] = EXP_NAME
 
     c = f"{EXE_PATH} "
 
@@ -162,3 +165,6 @@ for conf in confs:
             run(conf + '/' + c_p.stem)
     else:
         run(conf)
+
+
+run(f"python json_to_pd.py --exp_path .\\exp\\{conf['exp_name']}")

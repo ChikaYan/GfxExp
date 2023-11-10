@@ -2,9 +2,13 @@ import numpy as np
 import json
 from pathlib import Path
 import pandas as pd
+import argparse
 
 def main():
-    exp_path = Path('C:/nonsys/workspace/GfxExp/exp/cornell_box_dy/save_query_spp_4')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--exp_path', type=str, default='C:/nonsys/workspace/GfxExp/exp/cornell_box_dy/save_query_spp_4')
+    args = parser.parse_args()
+    exp_path = Path(args.exp_path)
     
     json_lists = sorted(list(exp_path.glob('*.json')))
 
