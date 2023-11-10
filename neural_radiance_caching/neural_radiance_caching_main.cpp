@@ -2121,8 +2121,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             curFBWidth = newFBWidth;
             curFBHeight = newFBHeight;
 
-            renderTargetSizeX = curFBWidth / UIScaling;
-            renderTargetSizeY = curFBHeight / UIScaling;
+            // renderTargetSizeX = curFBWidth / UIScaling;
+            // renderTargetSizeY = curFBHeight / UIScaling;
             requestedSize[0] = renderTargetSizeX;
             requestedSize[1] = renderTargetSizeY;
 
@@ -3152,8 +3152,34 @@ int32_t main(int32_t argc, const char* argv[]) try {
                                         // framePyCache["train_query"][dataStartIndex+batchID]["target"][sppId] = {trainTargetBufferHost.x, trainTargetBufferHost.y, trainTargetBufferHost.z};
                                         framePyCache["train_query"][dataStartIndex+batchID][std::format("target_{:03}", sppId)] = {trainTargetBufferHost.x, trainTargetBufferHost.y, trainTargetBufferHost.z};
 
-                                        // std::cout << trainRadianceQueryBufferHost.position.x << "\n";
                                     }
+
+
+                                    // const int transfer_query_size = 16384 / 64;
+                                    // for (int batchID=0; batchID < batchSize; batchID+=transfer_query_size){
+                                    //     if (sppId == 0){
+                                    //         shared::RadianceQuery trainRadianceQueryBufferHost[transfer_query_size];
+                                    //         CUDADRV_CHECK(cuMemcpyDtoHAsync(trainRadianceQueryBufferHost, trainRadianceQueryBuffer[1].getCUdeviceptrAt(dataStartIndex+batchID),
+                                    //                         sizeof(trainRadianceQueryBufferHost), cuStream));
+                                    //         for (int i=0; i < transfer_query_size; ++i){
+                                    //             framePyCache["train_query"][dataStartIndex+batchID] = logQueryToJson(trainRadianceQueryBufferHost[i]);
+                                    //         }
+
+                                    //     }
+                                    // }
+                                    // const int transfer_target_size = 16384/4;
+                                    // // const int transfer_target_size = 4;
+                                    // for (int batchID=0; batchID < batchSize; batchID+=transfer_target_size){
+                                        
+                                    //     float3 trainTargetBufferHost[transfer_target_size];
+                                    //     CUDADRV_CHECK(cuMemcpyDtoHAsync(trainTargetBufferHost, trainTargetBuffer[1].getCUdeviceptrAt(dataStartIndex+batchID),
+                                    //                     sizeof(trainTargetBufferHost), cuStream));
+                                    //     for (int i=0; i < transfer_target_size; ++i){
+                                    //         framePyCache["train_query"][dataStartIndex+batchID+i][std::format("target_{:03}", sppId)] = {trainTargetBufferHost[i].x, trainTargetBufferHost[i].y, trainTargetBufferHost[i].z};
+                                    //     }
+                                    // }
+
+
                                 }
 
                                 neuralRadianceCache.train(
