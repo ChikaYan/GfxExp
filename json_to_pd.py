@@ -6,7 +6,8 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--exp_path', type=str, default='C:/nonsys/workspace/GfxExp/exp/cornell_box_dy/save_query_spp_4')
+    parser.add_argument('-p', '--exp_path', type=str, default='C:/nonsys/workspace/GfxExp/exp/living_room_diffuse/save_query_spp_16')
+    parser.add_argument('--del_json', action='store_true', default=False)
     args = parser.parse_args()
     exp_path = Path(args.exp_path)
     
@@ -50,7 +51,8 @@ def main():
         print(f"saved: {str(out_path)}")
         store.close()
 
-        # json_lists[frame_id].unlink()
+        if args.del_json:
+            json_lists[frame_id].unlink()
         
 
                         

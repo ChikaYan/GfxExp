@@ -9,47 +9,13 @@ def cmd(command):
 
 
 confs = [
-    # "bistro_old/test",
-    # "bistro_old/hash_lv=4/nrc_only_emit",
-    # "bistro_old/nrc_only_emit",
-    # "bistro_old/pt1",
 
-
-    # "bistro/separate/test",
-    # "bistro/separate/nrc",
-    # "bistro/separate/nrc_only",
-    # "bistro/separate/nrc_only_diffuse",
-    # "bistro/separate/nrc_only_specular",
-    # "bistro/nrc_gt_check_64",
-    # "bistro/fre_exp/hash_2",
-    # "bistro/fre_exp/hash_4",
-    # "bistro/fre_exp/hash_16",
-    # "bistro/fre_exp/tri_2",
-    # "bistro/fre_exp/tri_6",
-    # "bistro/fre_exp/tri_12",
-
-
-    # "cornell_box/fre_exp/hash_2",
-    # "cornell_box/fre_exp/hash_4",
-    # "cornell_box/fre_exp/hash_16",
-    # "cornell_box/fre_exp/tri_2",
-    # "cornell_box/fre_exp/tri_6",
-    # "cornell_box/fre_exp/tri_12",
-    # "cornell_box/test",
-    # "cornell_box/pt_1024",
-    # "cornell_box/nrc",
-    # "cornell_box/separate/test",
-    # "cornell_box/nrc_only_emit",
-    # "cornell_box/separate/nrc",
-    # "cornell_box/separate/nrc_only_emit",
-    # "cornell_box/separate/nrc_diffuse",
-    # "cornell_box/separate/nrc_specular",
 
     # "cornell_box_dy/test",
     # "cornell_box_dy/save_query",
-    # "cornell_box_dy/save_query_spp_4",
+    # "cornell_box_dy/pt_16k",
+    # "cornell_box_dy/save_query_spp_16",
     # "cornell_box_dy/save_query_2",
-    # "cornell_box_dy/pt_1024",
     # "cornell_box_dy/nrc_only_emit",
     # "cornell_box_dy/motion_tri/2",
     # "cornell_box_dy/motion_tri/6",
@@ -67,7 +33,9 @@ confs = [
     # "living_room_dy/motion_tri/6_tri",
 
     # "living_room_diffuse/test",
-    "living_room_diffuse/test_restir",
+    "living_room_diffuse/pt_16k",
+    # "living_room_diffuse/save_query_spp_16",
+    # "living_room_diffuse/test_restir",
     # "living_room_diffuse/nrc_only_emit_spp_32_tri_2_low_lr_2",
     # "living_room_diffuse/pt_32",
 
@@ -113,8 +81,8 @@ confs = [
 # conf_name = "bistro/hash_lv=4/nrc_tri_low_fre"
 
 def run(conf_name):
-    # EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
-    EXE_PATH = "C:/nonsys/workspace/gfxexp_original/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
+    EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
+    # EXE_PATH = "C:/nonsys/workspace/gfxexp_original/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
     # EXE_PATH = "C:/nonsys/workspace/gfxexp_original/GfxExp/build/bin/Debug/restir.exe"
     # EXE_PATH = "C:/nonsys/workspace/GfxExp/build/bin/Debug/restir.exe"
     # EXE_PATH = "C:/nonsys/workspace/GfxExp/original_copy/GfxExp/build/bin/Debug/neural_radiance_caching.exe"
@@ -156,6 +124,8 @@ def run(conf_name):
             exp_path=f"C:/nonsys/workspace/GfxExp/exp/{conf['exp_name']}", 
             gt_dir=ex_conf.get('gt_dir', None),
             )
+        
+    run(f"python json_to_pd.py --exp_path .\\exp\\{conf['exp_name']}")
 
 
 for conf in confs:
@@ -167,4 +137,4 @@ for conf in confs:
         run(conf)
 
 
-run(f"python json_to_pd.py --exp_path .\\exp\\{conf['exp_name']}")
+

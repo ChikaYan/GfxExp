@@ -2762,7 +2762,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         }
         curGPUTimer.computePDFTexture.stop(cuStream);
 
-        bool newSequence = resized || frameIndex == 0 || resetAccumulation;
+        // bool newSequence = resized || frameIndex == 0 || resetAccumulation;
+        bool newSequence = frameIndex == 0;
         bool firstAccumFrame =
             animate || !enableAccumulation || cameraIsActuallyMoving || newSequence;
         if (firstAccumFrame)
@@ -3323,7 +3324,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
         if (savePyCache){
             std::string filename = expPath + std::format("/query_frame_{:03}.json", frameIndex);
             std::ofstream o(filename);
-            o << std::setw(2) << framePyCache << std::endl;
+            // o << std::setw(2) << framePyCache << std::endl;
+            o << framePyCache << std::endl;
             // exit(0);
         }
 
