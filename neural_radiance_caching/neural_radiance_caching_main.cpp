@@ -535,7 +535,7 @@ static double g_mouseX;
 static double g_mouseY;
 
 static float g_initBrightness = 0.0f;
-static float g_cameraPositionalMovingSpeed;
+static float g_cameraPositionalMovingSpeed = 0.0f;
 static float g_cameraDirectionalMovingSpeed;
 static float g_cameraTiltSpeed;
 static Quaternion g_cameraOrientation;
@@ -571,6 +571,10 @@ static bool warpDyCoord = false;
 static bool perturbSmooth = false;
 
 static bool savePyCache = false;
+
+static int camMoveX = 0;
+static int camMoveY = 0;
+static int camMoveZ = 0;
 
 static float perturbSmoothRange = 0.1f;
 
@@ -1067,6 +1071,22 @@ static void parseCommandline(int32_t argc, const char* argv[]) {
             // save radiance querys to run the neural networks in python
             savePyCache = true;
         }
+        else if (0 == strncmp(arg, "-cam-move-x", 11)) {
+            camMoveX = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-cam-move-y", 11)) {
+            camMoveY = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-cam-move-z", 11)) {
+            camMoveZ = std::stol(argv[i + 1]);
+            i += 1;
+        }
+        else if (0 == strncmp(arg, "-cam-speed", 11)) {
+            g_cameraPositionalMovingSpeed = std::atof(argv[i + 1]);
+            i += 1;
+        }
         else {
             printf("Unknown option: %s.\n", arg);
             exit(EXIT_FAILURE);
@@ -1395,7 +1415,7 @@ int32_t main(int32_t argc, const char* argv[]) try {
     
 
     float3 sceneDim = scene.initialSceneAabb.maxP - scene.initialSceneAabb.minP;
-    g_cameraPositionalMovingSpeed = 0.003f * std::max({ sceneDim.x, sceneDim.y, sceneDim.z });
+    if (g_cameraPositionalMovingSpeed == 0.0f) g_cameraPositionalMovingSpeed = 0.003f * std::max({ sceneDim.x, sceneDim.y, sceneDim.z });
     g_cameraDirectionalMovingSpeed = 0.0015f;
     g_cameraTiltSpeed = 0.025f;
 
@@ -2100,6 +2120,12 @@ int32_t main(int32_t argc, const char* argv[]) try {
     
     CsvLogger csvLogger = CsvLogger(expPath + "/log.csv");
 
+    // log scene dim
+    std::ofstream myfile;
+    myfile.open(expPath + "/scene_dim.txt");
+    myfile << sceneDim.x << " " << sceneDim.y << " " << sceneDim.z;
+    myfile.close();
+
 
     while ( (frameStop < 0) || (frameIndex <= frameStop)) {
     // while (true){
@@ -2219,6 +2245,9 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t trackZ = decideDirection(g_keyForward, g_keyBackward);
             int32_t trackX = decideDirection(g_keyLeftward, g_keyRightward);
             int32_t trackY = decideDirection(g_keyUpward, g_keyDownward);
+            if (camMoveX != 0) trackX = camMoveX;
+            if (camMoveY != 0) trackX = camMoveY;
+            if (camMoveZ != 0) trackX = camMoveZ;
             int32_t tiltZ = decideDirection(g_keyTiltRight, g_keyTiltLeft);
             int32_t adjustPosMoveSpeed = decideDirection(g_keyFasterPosMovSpeed, g_keySlowerPosMovSpeed);
 

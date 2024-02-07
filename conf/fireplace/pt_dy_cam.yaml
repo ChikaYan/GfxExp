@@ -1,0 +1,42 @@
+
+# Experiment
+exp_name:
+frame_num: 1
+save_img_every: 1
+unbiased_restir:
+render_mode: pt
+# learning-rate: 1e-3
+position-encoding: hash-grid
+
+spp: 16000
+
+# Camera
+cam-pos: 3.354 1.507 -0.849
+cam-roll: 190.704
+cam-pitch: -210.841
+cam-yaw: 66.872
+cam-move-x: 1
+cam-speed: 0.001
+
+# Scene
+object0:
+  brightness: 2.0
+  name: scene 
+  obj: C:\nonsys\workspace\GfxExp\scene\fireplace_room\fireplace_room.obj 1.0 simple_pbr
+  inst: scene
+
+# # Dynamics
+# object1:
+#   name: geodesic 
+#   obj: C:\nonsys\workspace\GfxExp\scene\geodesic\geodesic_classI_2.obj 0.2 simple_pbr
+# begin-pos: 0.738 0.665 4.254
+# end-pos: 0.738 1.5 4.254
+# freq: 5
+# time: 0.
+# inst: geodesic
+
+
+# Extra configs
+no-cmd:
+  parse_tb: false
+  gt_dir:

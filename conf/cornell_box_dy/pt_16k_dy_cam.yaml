@@ -1,0 +1,39 @@
+
+# Experiment
+exp_name:
+frame_num: 300
+save_img_every: 1
+unbiased_restir:
+render_mode: pt
+position-encoding: hash-grid
+spp: 8000
+
+# Camera
+cam-pos: 1.5 1.061 2.383
+cam-roll: -179.704
+cam-pitch: 179.841
+cam-yaw: 13.872
+cam-move-x: 1
+
+# Scene
+object0:
+  brightness: 1.0
+  name: scene 
+  obj: C:\nonsys\workspace\GfxExp\scene\CornellBox\CornellBox-Mirror.obj 1.0 simple_pbr
+  inst: scene
+
+# Dynamics
+object1:
+  name: geodesic 
+  obj: C:\nonsys\workspace\GfxExp\scene\geodesic\geodesic_classI_2.obj 0.1 simple_pbr
+begin-pos: 0.535 1.497 -0.135
+end-pos: -0.8 1.497 -0.135
+freq: 10
+time: 0.
+inst: geodesic
+
+
+# Extra configs
+no-cmd:
+  parse_tb: true
+  gt_dir:

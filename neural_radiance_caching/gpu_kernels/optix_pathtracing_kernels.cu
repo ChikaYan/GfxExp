@@ -1292,7 +1292,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(visualizePrediction)() {
 
     const PerspectiveCamera &camera = plp.f->camera;
 
-    // float3 contribution = make_float3(0.001f, 0.001f, 0.001f);
+    float3 contribution = make_float3(0.001f, 0.001f, 0.001f);
     if (materialSlot != 0xFFFFFFFF) {
         const MaterialData &mat = plp.s->materialDataBuffer[materialSlot];
 
@@ -1307,16 +1307,16 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(visualizePrediction)() {
         ReferenceFrame shadingFrame(shadingNormalInWorld);
         positionInWorld = offsetRayOriginNaive(positionInWorld, frontHit * geometricNormalInWorld);
 
-        // // JP: 光源を直接見ている場合の寄与を蓄積。
-        // // EN: Accumulate the contribution from a light source directly seeing.
-        // contribution = make_float3(0.0f);
-        // float3 alpha = make_float3(1.0f);
-        // float3 vOutLocal = shadingFrame.toLocal(vOut);
-        // if (vOutLocal.z > 0 && mat.emittance) {
-        //     float4 texValue = tex2DLod<float4>(mat.emittance, texCoord.x, texCoord.y, 0.0f);
-        //     float3 emittance = make_float3(texValue);
-        //     contribution += alpha * emittance / Pi;
-        // }
+        // JP: 光源を直接見ている場合の寄与を蓄積。
+        // EN: Accumulate the contribution from a light source directly seeing.
+        contribution = make_float3(0.0f);
+        float3 alpha = make_float3(1.0f);
+        float3 vOutLocal = shadingFrame.toLocal(vOut);
+        if (vOutLocal.z > 0 && mat.emittance) {
+            float4 texValue = tex2DLod<float4>(mat.emittance, texCoord.x, texCoord.y, 0.0f);
+            float3 emittance = make_float3(texValue);
+            contribution += alpha * emittance / Pi;
+        }
 
         BSDF bsdf;
         bsdf.setup(mat, texCoord);
@@ -1335,14 +1335,15 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(visualizePrediction)() {
         plp.s->inferenceRadianceQueryBuffer[linearIndex] = radQuery;
     }
     else {
-        //// JP: 環境光源を直接見ている場合の寄与を蓄積。
-        //// EN: Accumulate the contribution from the environmental light source directly seeing.
-        //if (useEnvLight) {
-        //    float u = texCoord.x, v = texCoord.y;
-        //    float4 texValue = tex2DLod<float4>(plp.s->envLightTexture, u, v, 0.0f);
-        //    float3 luminance = plp.f->envLightPowerCoeff * make_float3(texValue);
-        //    contribution = luminance;
-        //}
+        // JP: 環境光源を直接見ている場合の寄与を蓄積。
+        // EN: Accumulate the contribution from the environmental light source directly seeing.
+        bool useEnvLight = plp.s->envLightTexture && plp.f->enableEnvLight;
+        if (useEnvLight) {
+           float u = texCoord.x, v = texCoord.y;
+           float4 texValue = tex2DLod<float4>(plp.s->envLightTexture, u, v, 0.0f);
+           float3 luminance = plp.f->envLightPowerCoeff * make_float3(texValue);
+           contribution = luminance;
+        }
     }
 
     TerminalInfo terminalInfo;
@@ -1353,5 +1354,5 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(visualizePrediction)() {
     terminalInfo.isUnbiasedTile = false;
     plp.s->inferenceTerminalInfoBuffer[linearIndex] = terminalInfo;
 
-    // plp.s->perFrameContributionBuffer[linearIndex] = contribution;
+    plp.s->perFrameContributionBuffer[linearIndex] = contribution;
 }
