@@ -2246,8 +2246,8 @@ int32_t main(int32_t argc, const char* argv[]) try {
             int32_t trackX = decideDirection(g_keyLeftward, g_keyRightward);
             int32_t trackY = decideDirection(g_keyUpward, g_keyDownward);
             if (camMoveX != 0) trackX = camMoveX;
-            if (camMoveY != 0) trackX = camMoveY;
-            if (camMoveZ != 0) trackX = camMoveZ;
+            if (camMoveY != 0) trackY = camMoveY;
+            if (camMoveZ != 0) trackZ = camMoveZ;
             int32_t tiltZ = decideDirection(g_keyTiltRight, g_keyTiltLeft);
             int32_t adjustPosMoveSpeed = decideDirection(g_keyFasterPosMovSpeed, g_keySlowerPosMovSpeed);
 
